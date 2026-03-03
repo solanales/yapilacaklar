@@ -8,17 +8,11 @@
   "theme_color": "#0d0d14",
   "orientation": "portrait",
   "icons": [
-  {
-    "src": "icon.png",
-    "sizes": "512x512",
-    "type": "image/png",
-    "purpose": "any"
-  }
-]
-      "src": "icon.svg",
+    {
+      "src": "icon.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
