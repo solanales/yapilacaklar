@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0d14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Yapilacaklar" />
+  <title>Yapilacaklar</title>
+  <link rel="manifest" href="manifest.json" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0d0d14; color: #e2e8f0; }
+    input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+const STORAGE_KEY = "gunluk-plan-stable";
+const RECURRENCE_OPTIONS = [
+  { value: "tek-seferlik", label: "Tek Seferlik" },
+  { value: "gunluk", label: "Gunluk" },
+  { value: "haftalik", label: "Haftalik" },
+  { value: "aylik", label: "Aylik" },
+];
+const WEEKDAYS = ["Pazartesi","Sali","Carsamba","Persembe","Cuma","Cumartesi","Pazar"];
+const PRIORITIES = ["yuksek", "orta", "dusuk"];
+const priorityLabel = { yuksek: "yüksek", orta: "orta", dusuk: "düşük" };
+const priorityColor = { yuksek: "#ef4444", orta: "#f59e0b", dusuk: "#3b82f6" };
+const priorityBg = { yuksek: "rgba(239,68,68,0.12)", orta: "rgba(245,158,11,0.12)", dusuk: "rgba(59,130,246,0.12)" };
+const recurrenceColor = { "tek-seferlik": "#64748b", "gunluk": "#818cf8", "haftalik": "#34d399", "aylik": "#f472b6" };
+const statusConfig = {
+  bekliyor: { label: "Bekliyor", color: "#94a3b8", bg: "rgba(148,163,184,0.12)" },
+  devamediyor: { label: "Devam Ediyor", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+  tamamlandi: { label: "Tamamlandi", color: "#22c55e", bg: "rgba(34,197,94,0.12)" },
+};
+
+const DEFAULT_CATEGORIES = ["Biyomedikal", "Kosu Koclugu", "Kisisel"];
+
+const initialTasks = [
+  { id: 1, category: "Biyomedikal", emoji: "🏥", title: "MR Cihazi - Firma Esligi", detail: "Ogleden once firma gelecek, ariza tespitine eslik et.", priority: "yuksek", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+  { id: 2, category: "Biyomedikal", emoji: "🏥", title: "BT Arizasi - Firma Bildirimi", detail: "Bilgisayarli tomografi arizasini ilgili firmaya bildir.", priority: "yuksek", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+  { id: 6, category: "Biyomedikal", emoji: "📋", title: "Bildirim Paneli - Cihaz Durumu Bilgisi", detail: "Biyomedikal bildirim paneline cihaz durumu bilgisi ekle.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+  { id: 7, category: "Biyomedikal", emoji: "🤝", title: "GE - Gama Kamera Tasima Gorusmeleri", detail: "GE ile gama kamera tasima isleri hakkinda gorusme yap.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+  { id: 3, category: "Kosu Koclugu", emoji: "🏃", title: "Haftalik Antrenman Planlari", detail: "Her sporcu icin haftalik kosu plani olustur.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "haftalik", recurrenceDay: "Pazartesi", subtasks: [
+    { id: "3-1", label: "Arzu Celik", done: false },
+    { id: "3-2", label: "Cansel Celik", done: false },
+    { id: "3-3", label: "Cagatay Yilmaz", done: false },
+    { id: "3-4", label: "Erhan Kaya", done: false },
+    { id: "3-5", label: "Goksel Celik", done: false },
+    { id: "3-6", label: "Hasan Firat Sarioglu", done: false },
+    { id: "3-7", label: "Meliha Sultan Ozenc", done: false },
+    { id: "3-8", label: "Tugce Calikoglu Eski", done: false },
+    { id: "3-9", label: "Volkan Gunduz", done: false },
+    { id: "3-10", label: "Zeynep Yesil", done: false },
+  ], startedAt: null },
+  { id: 4, category: "Kisisel", emoji: "🐱", title: "Luna - Su Sebili Filtresi", detail: "Luna icin su sebili filtresi satin al.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+  { id: 5, category: "Kisisel", emoji: "🚗", title: "Arac Muayenesi", detail: "Arac muayenesi icin randevu al.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
+];
+
+function formatElapsed(isoString) {
+  if (!isoString) return null;
+  const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
+  if (diff < 60) return diff + "s";
+  if (diff < 3600) return Math.floor(diff / 60) + "dk";
+  if (diff < 86400) return Math.floor(diff / 3600) + "sa";
+  return Math.floor(diff / 86400) + "g";
+}
+
+function CheckCircle({ status, onClick }) {
+  const cfg = statusConfig[status];
+  const done = status === "tamamlandi";
+  const going = status === "devamediyor";
+  return (
+    <button onClick={onClick} style={{ width: 22, height: 22, borderRadius: "50%", border: "2px solid " + (status === "bekliyor" ? "#334155" : cfg.color), background: done ? cfg.color : "transparent", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", padding: 0 }}>
+      {done && <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#0d0d14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+      {going && <div style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />}
+    </button>
+  );
+}
+
+function TimeEditor({ value, onChange, onClose }) {
+  const today = new Date().toISOString().split("T")[0];
+  const ref = useRef();
+  useEffect(() => { if (ref.current) ref.current.focus(); }, []);
+  return (
+    <div style={{ marginTop: "0.5rem", background: "#0d0d14", border: "1px solid #1e293b", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+      <div style={{ fontSize: "0.72rem", color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem" }}>Zamanlama</div>
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+        {[{label:"Bugun", value:"bugun"},{label:"Yarin", value:"yarin"}].map(opt => (
+          <button key={opt.value} onClick={() => { onChange(opt.value); onClose(); }} style={{ fontSize: "0.72rem", padding: "3px 12px", borderRadius: 99, cursor: "pointer", border: "none", background: value === opt.value ? "#818cf8" : "#1e293b", color: value === opt.value ? "#0d0d14" : "#94a3b8", fontWeight: value === opt.value ? "bold" : "normal" }}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+        <input ref={ref} type="date" defaultValue={value && value.match(/^\d{4}/) ? value : today} onChange={(e) => onChange(e.target.value)} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "4px 8px", color: "#e2e8f0", fontSize: "0.78rem", outline: "none", cursor: "pointer" }} />
+        <button onClick={onClose} style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "4px 10px", color: "#94a3b8", cursor: "pointer", fontSize: "0.75rem" }}>Kapat</button>
+      </div>
+    </div>
+  );
+}
+
+function RecurrenceEditor({ task, onChange }) {
+  return (
+    <div style={{ marginTop: "0.6rem", background: "#0d0d14", border: "1px solid #1e293b", borderRadius: 8, padding: "0.7rem 0.9rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+      <div style={{ fontSize: "0.72rem", color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase" }}>Tekrarlama</div>
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+        {RECURRENCE_OPTIONS.map((opt) => (
+          <button key={opt.value} onClick={() => onChange({ recurrence: opt.value, recurrenceDay: opt.value === "haftalik" ? (task.recurrenceDay || "Pazartesi") : null })} style={{ fontSize: "0.72rem", padding: "3px 10px", borderRadius: 99, cursor: "pointer", border: "none", background: task.recurrence === opt.value ? recurrenceColor[opt.value] : "#1e293b", color: task.recurrence === opt.value ? "#0d0d14" : "#94a3b8", fontWeight: task.recurrence === opt.value ? "bold" : "normal" }}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {task.recurrence === "haftalik" && (
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+          {WEEKDAYS.map((day) => (
+            <button key={day} onClick={() => onChange({ recurrenceDay: day })} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, cursor: "pointer", border: "none", background: task.recurrenceDay === day ? "#34d399" : "#1e293b", color: task.recurrenceDay === day ? "#0d0d14" : "#94a3b8", fontWeight: task.recurrenceDay === day ? "bold" : "normal" }}>
+              {day}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryEditor({ task, allCategories, onSelect, onAddCategory, onClose }) {
+  const [input, setInput] = useState("");
+  return (
+    <div style={{ marginTop: "0.5rem", background: "#0d0d14", border: "1px solid #1e293b", borderRadius: 8, padding: "0.7rem 0.9rem" }}>
+      <div style={{ fontSize: "0.72rem", color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem" }}>Kategori</div>
+      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+        {allCategories.map(cat => (
+          <button key={cat} onClick={() => { onSelect(cat); onClose(); }} style={{ fontSize: "0.68rem", padding: "2px 10px", borderRadius: 99, border: "none", cursor: "pointer", background: task.category === cat ? "#818cf8" : "#1e293b", color: task.category === cat ? "#0d0d14" : "#94a3b8", fontWeight: task.category === cat ? "bold" : "normal" }}>
+            {cat}
+          </button>
+        ))}
+        <input value={input} onChange={e => setInput(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" && input.trim()) { onAddCategory(input.trim()); onSelect(input.trim()); setInput(""); onClose(); }
+            if (e.key === "Escape") onClose();
+          }}
+          placeholder="+ yeni kategori"
+          style={{ fontSize: "0.68rem", padding: "2px 10px", borderRadius: 99, background: "#1e293b", border: "1px dashed #334155", color: "#94a3b8", outline: "none", width: 120 }} />
+      </div>
+    </div>
+  );
+}
+
+function WeeklyCalendar({ tasks }) {
+  const [base, setBase] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+  const todayStr = localDateStr();
+  const dotColor = { bekliyor: "#94a3b8", devamediyor: "#f59e0b", tamamlandi: "#22c55e" };
+
+  const getWeekDays = (d) => {
+    const day = d.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const start = new Date(d);
+    start.setDate(d.getDate() + diff);
+    return Array.from({ length: 7 }, (_, i) => {
+      const dd = new Date(start);
+      dd.setDate(start.getDate() + i);
+      return dd;
+    });
+  };
+
+  const getTasksForDate = (ds) => tasks.filter(t => {
+    if (t.time === "bugun") return ds === localDateStr();
+    const tom = new Date(); tom.setDate(tom.getDate() + 1);
+    if (t.time === "yarin") return ds === localDateStr(tom);
+    return t.time === ds;
+  });
+
+  const days = getWeekDays(base);
+  const selectedTasks = selectedDay ? getTasksForDate(selectedDay.ds) : [];
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <button onClick={() => { const d = new Date(base); d.setDate(d.getDate() - 7); setBase(d); setSelectedDay(null); }} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "6px 14px", color: "#94a3b8", cursor: "pointer" }}>{"<"}</button>
+        <span style={{ fontSize: "0.82rem", color: "#64748b" }}>
+          {days[0].toLocaleDateString("tr-TR", { day: "numeric", month: "short" })} - {days[6].toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" })}
+        </span>
+        <button onClick={() => { const d = new Date(base); d.setDate(d.getDate() + 7); setBase(d); setSelectedDay(null); }} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "6px 14px", color: "#94a3b8", cursor: "pointer" }}>{">"}</button>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 360 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.2rem", marginBottom: "0.2rem" }}>
+            {["Pt","Sa","Ca","Pe","Cu","Ct","Pz"].map(d => (
+              <div key={d} style={{ textAlign: "center", fontSize: "0.65rem", color: "#475569", padding: "0.2rem 0" }}>{d}</div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.2rem" }}>
+            {days.map((day, i) => {
+              const ds = localDateStr(day);
+              const dt = getTasksForDate(ds);
+              const isToday = ds === todayStr;
+              const isSelected = selectedDay && selectedDay.ds === ds;
+              return (
+                <div key={i} onClick={() => setSelectedDay(isSelected ? null : { ds, date: day })}
+                  style={{ minHeight: 56, background: isSelected ? "#1e1e3a" : isToday ? "#1a1a2e" : "#13131f", border: "1px solid " + (isSelected ? "#818cf8" : isToday ? "#818cf855" : "#1e293b"), borderRadius: 7, padding: "0.3rem", cursor: "pointer" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: (isToday || isSelected) ? "bold" : "normal", color: isSelected || isToday ? "#818cf8" : "#475569", textAlign: "center", marginBottom: "0.2rem" }}>
+                    {day.getDate()}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3, justifyContent: "center" }}>
+                    {dt.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor[t.status] || "#94a3b8" }} title={t.title} />
+                    ))}
+                    {dt.length > 4 && <div style={{ fontSize: "0.48rem", color: "#475569" }}>+{dt.length - 4}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {selectedDay && (
+        <div style={{ marginTop: "1rem", background: "#13131f", border: "1px solid #1e293b", borderRadius: 12, padding: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <span style={{ fontSize: "0.85rem", color: "#818cf8", fontWeight: "bold" }}>
+              {selectedDay.date.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" })}
+            </span>
+            <button onClick={() => setSelectedDay(null)} style={{ background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1 }}>x</button>
+          </div>
+          {selectedTasks.length === 0 ? (
+            <div style={{ fontSize: "0.78rem", color: "#475569", textAlign: "center", padding: "0.75rem 0" }}>Bu gun icin gorev yok</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              {selectedTasks.map(t => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0.7rem", background: "#0d0d14", borderRadius: 8, border: "1px solid #1e293b" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor[t.status] || "#94a3b8", flexShrink: 0 }} />
+                  <span style={{ fontSize: "0.82rem", color: t.status === "tamamlandi" ? "#475569" : "#cbd5e1", textDecoration: t.status === "tamamlandi" ? "line-through" : "none", flex: 1 }}>
+                    {t.emoji + " " + t.title}
+                  </span>
+                  <span style={{ fontSize: "0.65rem", padding: "1px 7px", borderRadius: 99, background: t.status === "bekliyor" ? "rgba(148,163,184,0.12)" : t.status === "devamediyor" ? "rgba(245,158,11,0.12)" : "rgba(34,197,94,0.12)", color: t.status === "bekliyor" ? "#94a3b8" : t.status === "devamediyor" ? "#f59e0b" : "#22c55e" }}>
+                    {t.status === "bekliyor" ? "Bekliyor" : t.status === "devamediyor" ? "Devam" : "Tamam"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+function MonthlyCalendar({ tasks }) {
+  const [base, setBase] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(null);
+  const todayStr = localDateStr();
+  const dotColor = { bekliyor: "#94a3b8", devamediyor: "#f59e0b", tamamlandi: "#22c55e" };
+
+  const getMonthDays = (d) => {
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    const startDow = first.getDay() === 0 ? 6 : first.getDay() - 1;
+    const days = [];
+    for (let i = 0; i < startDow; i++) {
+      const dd = new Date(first); dd.setDate(dd.getDate() - (startDow - i));
+      days.push({ date: dd, inMonth: false });
+    }
+    for (let i = 1; i <= last.getDate(); i++) days.push({ date: new Date(year, month, i), inMonth: true });
+    while (days.length < 42) {
+      const prev = days[days.length - 1].date;
+      const dd = new Date(prev); dd.setDate(prev.getDate() + 1);
+      days.push({ date: dd, inMonth: false });
+    }
+    return days;
+  };
+
+  const getTasksForDate = (ds) => tasks.filter(t => {
+    if (t.time === "bugun") return ds === localDateStr();
+    const tom = new Date(); tom.setDate(tom.getDate() + 1);
+    if (t.time === "yarin") return ds === localDateStr(tom);
+    return t.time === ds;
+  });
+
+  const days = getMonthDays(base);
+  const monthName = base.toLocaleDateString("tr-TR", { month: "long", year: "numeric" });
+  const selectedTasks = selectedDay ? getTasksForDate(selectedDay.ds) : [];
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+        <button onClick={() => { const d = new Date(base); d.setMonth(d.getMonth() - 1); setBase(d); setSelectedDay(null); }} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "6px 14px", color: "#94a3b8", cursor: "pointer" }}>{"<"}</button>
+        <span style={{ fontSize: "0.82rem", color: "#64748b", textTransform: "capitalize" }}>{monthName}</span>
+        <button onClick={() => { const d = new Date(base); d.setMonth(d.getMonth() + 1); setBase(d); setSelectedDay(null); }} style={{ background: "#1e293b", border: "none", borderRadius: 8, padding: "6px 14px", color: "#94a3b8", cursor: "pointer" }}>{">"}</button>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 360 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.2rem", marginBottom: "0.2rem" }}>
+            {["Pt","Sa","Ca","Pe","Cu","Ct","Pz"].map(d => (
+              <div key={d} style={{ textAlign: "center", fontSize: "0.65rem", color: "#475569", padding: "0.2rem 0" }}>{d}</div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.2rem" }}>
+            {days.map(({ date, inMonth }, i) => {
+              const ds = localDateStr(date);
+              const dt = getTasksForDate(ds);
+              const isToday = ds === todayStr;
+              const isSelected = selectedDay && selectedDay.ds === ds;
+              return (
+                <div key={i} onClick={() => setSelectedDay(isSelected ? null : { ds, date })}
+                  style={{ minHeight: 46, background: isSelected ? "#1e1e3a" : isToday ? "#1a1a2e" : inMonth ? "#13131f" : "#0d0d14", border: "1px solid " + (isSelected ? "#818cf8" : isToday ? "#818cf855" : "#1e293b"), borderRadius: 7, padding: "0.3rem", opacity: inMonth ? 1 : 0.3, cursor: "pointer" }}>
+                  <div style={{ fontSize: "0.68rem", color: isSelected || isToday ? "#818cf8" : "#64748b", textAlign: "right", fontWeight: (isToday || isSelected) ? "bold" : "normal", marginBottom: "0.2rem" }}>
+                    {date.getDate()}
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                    {dt.slice(0, 4).map(t => (
+                      <div key={t.id} style={{ width: 6, height: 6, borderRadius: "50%", background: dotColor[t.status] || "#94a3b8" }} title={t.title} />
+                    ))}
+                    {dt.length > 4 && <div style={{ fontSize: "0.48rem", color: "#475569" }}>+{dt.length - 4}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {selectedDay && (
+        <div style={{ marginTop: "1rem", background: "#13131f", border: "1px solid #1e293b", borderRadius: 12, padding: "1rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <span style={{ fontSize: "0.85rem", color: "#818cf8", fontWeight: "bold" }}>
+              {selectedDay.date.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" })}
+            </span>
+            <button onClick={() => setSelectedDay(null)} style={{ background: "transparent", border: "none", color: "#475569", cursor: "pointer", fontSize: "1.1rem", lineHeight: 1 }}>x</button>
+          </div>
+          {selectedTasks.length === 0 ? (
+            <div style={{ fontSize: "0.78rem", color: "#475569", textAlign: "center", padding: "0.75rem 0" }}>Bu gun icin gorev yok</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+              {selectedTasks.map(t => (
+                <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0.7rem", background: "#0d0d14", borderRadius: 8, border: "1px solid #1e293b" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor[t.status] || "#94a3b8", flexShrink: 0 }} />
+                  <span style={{ fontSize: "0.82rem", color: t.status === "tamamlandi" ? "#475569" : "#cbd5e1", textDecoration: t.status === "tamamlandi" ? "line-through" : "none", flex: 1 }}>
+                    {t.emoji + " " + t.title}
+                  </span>
+                  <span style={{ fontSize: "0.65rem", padding: "1px 7px", borderRadius: 99, background: t.status === "bekliyor" ? "rgba(148,163,184,0.12)" : t.status === "devamediyor" ? "rgba(245,158,11,0.12)" : "rgba(34,197,94,0.12)", color: t.status === "bekliyor" ? "#94a3b8" : t.status === "devamediyor" ? "#f59e0b" : "#22c55e" }}>
+                    {t.status === "bekliyor" ? "Bekliyor" : t.status === "devamediyor" ? "Devam" : "Tamam"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function localDateStr(d) {
+  const date = d || new Date();
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return yy + "-" + mm + "-" + dd;
+}
+
+function datePrefix() {
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return yy + mm + dd;
+}
+
+function Yapilacaklar() {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [customCategories, setCustomCategories] = useState([]);
+  const [view, setView] = useState("liste");
+  const [editingNote, setEditingNote] = useState(null);
+  const [noteInput, setNoteInput] = useState("");
+  const [expanded, setExpanded] = useState({ 3: true });
+  const [newSubtask, setNewSubtask] = useState({});
+  const [addingSubtask, setAddingSubtask] = useState(null);
+  const [editingRecurrence, setEditingRecurrence] = useState(null);
+  const [editingTime, setEditingTime] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [addingTask, setAddingTask] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(null);
+  const [titleInput, setTitleInput] = useState("");
+  const [newTask, setNewTask] = useState({ title: "", detail: "", category: "Kisisel", emoji: "📌", priority: "orta", time: "bugun" });
+  const [loaded, setLoaded] = useState(false);
+
+  // ✅ DÜZELTME: Sadece localStorage kullanılıyor
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const stored = JSON.parse(raw);
+        const storedTasks = Array.isArray(stored) ? stored : (stored.tasks || []);
+        const storedCats = Array.isArray(stored) ? [] : (stored.customCategories || []);
+        if (storedTasks.length > 0) {
+          const storedIds = new Set(storedTasks.map(t => t.id));
+          const newTasks = initialTasks.filter(t => !storedIds.has(t.id));
+          setTasks([...storedTasks, ...newTasks]);
+          if (storedCats.length > 0) setCustomCategories(storedCats);
+        }
+      }
+    } catch (_) {}
+    setLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, customCategories })); } catch (_) {}
+  }, [tasks, customCategories, loaded]);
+
+  const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...customCategories, ...tasks.map(t => t.category)])];
+
+  const cycleStatus = (id) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const order = ["bekliyor", "devamediyor", "tamamlandi"];
+      const next = order[(order.indexOf(t.status) + 1) % order.length];
+      return { ...t, status: next, startedAt: next === "devamediyor" && !t.startedAt ? new Date().toISOString() : next === "bekliyor" ? null : t.startedAt };
+    }));
+  };
+
+  const cyclePriority = (id) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const next = PRIORITIES[(PRIORITIES.indexOf(t.priority) + 1) % PRIORITIES.length];
+      return { ...t, priority: next };
+    }));
+  };
+
+  const toggleSubtask = (taskId, subId) => {
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      const subtasks = t.subtasks.map(s => s.id === subId ? { ...s, done: !s.done } : s);
+      const allDone = subtasks.length > 0 && subtasks.every(s => s.done);
+      return { ...t, subtasks, status: allDone ? "tamamlandi" : t.status === "tamamlandi" ? "devamediyor" : t.status };
+    }));
+  };
+
+  const addSubtask = (taskId) => {
+    const label = (newSubtask[taskId] || "").trim();
+    if (!label) return;
+    setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, subtasks: [...t.subtasks, { id: taskId + "-" + Date.now(), label: datePrefix() + " " + label, done: false }] }));
+    setNewSubtask(n => ({ ...n, [taskId]: "" }));
+    setAddingSubtask(null);
+  };
+
+  const removeSubtask = (taskId, subId) => {
+    setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, subtasks: t.subtasks.filter(s => s.id !== subId) }));
+  };
+
+  const deleteTask = (id) => {
+    setTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  const saveNote = (id) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, note: noteInput } : t));
+    setEditingNote(null);
+  };
+
+  const updateTask = (taskId, changes) => {
+    setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, ...changes }));
+  };
+
+  const addTask = () => {
+    const title = newTask.title.trim();
+    if (!title) return;
+    const id = Date.now();
+    const prefixedTitle = datePrefix() + " " + title;
+    setTasks(prev => [...prev, { id, category: newTask.category, emoji: newTask.emoji, title: prefixedTitle, detail: newTask.detail, priority: newTask.priority, time: newTask.time, status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null }]);
+    setNewTask({ title: "", detail: "", category: "Kisisel", emoji: "📌", priority: "orta", time: "bugun" });
+    setAddingTask(false);
+  };
+
+  const saveTitle = (id) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, title: titleInput.trim() || t.title } : t));
+    setEditingTitle(null);
+  };
+
+  const formatTimeLabel = (val) => {
+    if (!val || val === "bugun") return "Bugun";
+    if (val === "yarin") return "Yarin";
+    if (val && val.match(/^\d{4}/)) return new Date(val).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+    return val;
+  };
+
+  const completed = tasks.filter(t => t.status === "tamamlandi").length;
+  const inProgress = tasks.filter(t => t.status === "devamediyor").length;
+  const progress = Math.round((completed / tasks.length) * 100);
+  const todayLabel = new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
+  const categories = [...new Set(tasks.map(t => t.category))];
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0d0d14", fontFamily: "Georgia, serif", padding: "2rem 1rem", color: "#e2e8f0" }}>
+      <div style={{ maxWidth: 660, margin: "0 auto" }}>
+
+        {/* Header */}
+        <div style={{ marginBottom: "2rem" }}>
+          <div style={{ fontSize: "0.72rem", letterSpacing: "0.2em", color: "#64748b", textTransform: "uppercase", marginBottom: "0.3rem" }}>{todayLabel}</div>
+          <h1 style={{ fontSize: "2rem", fontWeight: "normal", margin: 0, color: "#f1f5f9", letterSpacing: "-0.02em" }}>Yapilacaklar</h1>
+          <div style={{ marginTop: "1rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+              <div style={{ display: "flex", gap: "0.75rem" }}>
+                <span style={{ fontSize: "0.72rem", color: "#22c55e" }}>{"✓ " + completed + " tamamlandi"}</span>
+                {inProgress > 0 && <span style={{ fontSize: "0.72rem", color: "#f59e0b" }}>{"● " + inProgress + " devam ediyor"}</span>}
+                <span style={{ fontSize: "0.72rem", color: "#475569" }}>{(tasks.length - completed - inProgress) + " bekliyor"}</span>
+              </div>
+              <span style={{ fontSize: "0.72rem", color: "#64748b" }}>{progress + "%"}</span>
+            </div>
+            <div style={{ height: 3, background: "#1e293b", borderRadius: 99, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: Math.round(((completed + inProgress) / tasks.length) * 100) + "%", background: "#f59e0b22", transition: "width 0.5s ease" }} />
+              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: progress + "%", background: "linear-gradient(90deg, #22c55e, #86efac)", transition: "width 0.5s ease" }} />
+            </div>
+          </div>
+          {/* View Toggle */}
+          <div style={{ display: "flex", gap: "0.4rem", marginTop: "1rem" }}>
+            {[{id:"liste",label:"Liste"},{id:"haftalik",label:"Haftalik"},{id:"aylik",label:"Aylik"}].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)} style={{ fontSize: "0.72rem", padding: "4px 12px", borderRadius: 99, border: "none", cursor: "pointer", background: view === v.id ? "#818cf8" : "#1e293b", color: view === v.id ? "#0d0d14" : "#94a3b8", fontWeight: view === v.id ? "bold" : "normal", transition: "all 0.2s" }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Calendar Views */}
+        {view === "haftalik" && <WeeklyCalendar tasks={tasks} />}
+        {view === "aylik" && <MonthlyCalendar tasks={tasks} />}
+
+        {/* List View */}
+        {view === "liste" && (
+          <div>
+            {categories.map(cat => (
+              <div key={cat} style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontSize: "0.68rem", letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: "0.5rem", paddingLeft: "0.2rem" }}>{cat}</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                  {tasks.filter(t => t.category === cat).sort((a, b) => {
+                    const order = { yuksek: 0, orta: 1, dusuk: 2 };
+                    return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
+                  }).map(task => {
+                    const st = statusConfig[task.status];
+                    const doneSubtasks = task.subtasks.filter(s => s.done).length;
+                    const isExpanded = expanded[task.id];
+                    const recLabel = (RECURRENCE_OPTIONS.find(o => o.value === task.recurrence) || {}).label || "Tek Seferlik";
+                    const recCol = recurrenceColor[task.recurrence] || "#64748b";
+                    const elapsed = formatElapsed(task.startedAt);
+
+                    return (
+                      <div key={task.id} style={{ background: "#13131f", border: "1px solid #1e293b", borderRadius: 14, padding: "1.1rem 1.2rem", opacity: task.status === "tamamlandi" ? 0.6 : 1, transition: "opacity 0.3s" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
+                          <div style={{ paddingTop: 2 }}>
+                            <CheckCircle status={task.status} onClick={() => cycleStatus(task.id)} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {editingTitle === task.id ? (
+                              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.2rem" }}>
+                                <input autoFocus value={titleInput} onChange={e => setTitleInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === "Enter") saveTitle(task.id); if (e.key === "Escape") setEditingTitle(null); }}
+                                  style={{ flex: 1, background: "#1e293b", border: "1px solid #475569", borderRadius: 6, padding: "4px 8px", color: "#f1f5f9", fontSize: "0.95rem", fontWeight: "bold", outline: "none" }} />
+                                <button onClick={() => saveTitle(task.id)} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "3px 8px", color: "#0d0d14", cursor: "pointer", fontSize: "0.72rem", fontWeight: "bold" }}>Kaydet</button>
+                                <button onClick={() => setEditingTitle(null)} style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "3px 6px", color: "#94a3b8", cursor: "pointer", fontSize: "0.72rem" }}>Iptal</button>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.4rem" }}>
+                                <div onClick={() => { setTitleInput(task.title); setEditingTitle(task.id); }} style={{ fontSize: "0.95rem", fontWeight: "bold", color: "#f1f5f9", textDecoration: task.status === "tamamlandi" ? "line-through" : "none", cursor: "text", flex: 1 }} title="Duzenlemek icin tikla">
+                                  {task.emoji + " " + task.title}
+                                </div>
+                                <button onClick={() => deleteTask(task.id)} title="Gorevi sil" style={{ background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.8rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                                  onMouseEnter={e => e.target.style.color = "#ef4444"}
+                                  onMouseLeave={e => e.target.style.color = "#334155"}>
+                                  🗑
+                                </button>
+                              </div>
+                            )}
+                            <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "0.2rem" }}>{task.detail}</div>
+
+                            {/* Badges */}
+                            <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                              <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: st.bg, color: st.color }}>{st.label}</span>
+
+                              <button onClick={() => setEditingTime(editingTime === task.id ? null : task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "none", cursor: "pointer" }}>
+                                {"⏰ " + formatTimeLabel(task.time)}
+                              </button>
+
+                              <button onClick={() => cyclePriority(task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: priorityBg[task.priority], color: priorityColor[task.priority], border: "none", cursor: "pointer" }}>
+                                {"● " + priorityLabel[task.priority]}
+                              </button>
+
+                              <button onClick={() => setEditingRecurrence(editingRecurrence === task.id ? null : task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: recCol + "18", color: recCol, border: "1px solid " + recCol + "44", cursor: "pointer" }}>
+                                {"🔁 " + recLabel + (task.recurrence === "haftalik" && task.recurrenceDay ? " · " + task.recurrenceDay : "")}
+                              </button>
+
+                              <button onClick={() => setEditingCategory(editingCategory === task.id ? null : task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,0.04)", color: "#64748b", border: "none", cursor: "pointer" }}>
+                                {"🏷 " + task.category}
+                              </button>
+
+                              {task.status === "devamediyor" && elapsed && (
+                                <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>{"⏱ " + elapsed}</span>
+                              )}
+
+                              {task.subtasks.length > 0 && (
+                                <button onClick={() => setExpanded(e => ({ ...e, [task.id]: !e[task.id] }))} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: "rgba(255,255,255,0.06)", color: "#94a3b8", border: "none", cursor: "pointer" }}>
+                                  {(isExpanded ? "▲ " : "▼ ") + doneSubtasks + "/" + task.subtasks.length + " alt gorev"}
+                                </button>
+                              )}
+                            </div>
+
+                            {editingTime === task.id && <TimeEditor value={task.time} onChange={val => updateTask(task.id, { time: val })} onClose={() => setEditingTime(null)} />}
+                            {editingRecurrence === task.id && <RecurrenceEditor task={task} onChange={changes => updateTask(task.id, changes)} />}
+                            {editingCategory === task.id && (
+                              <CategoryEditor
+                                task={task}
+                                allCategories={allCategories}
+                                onSelect={cat => updateTask(task.id, { category: cat })}
+                                onAddCategory={cat => setCustomCategories(prev => [...new Set([...prev, cat])])}
+                                onClose={() => setEditingCategory(null)}
+                              />
+                            )}
+
+                            {/* Subtasks */}
+                            {isExpanded && task.subtasks.length > 0 && (
+                              <div style={{ marginTop: "0.75rem", borderLeft: "2px solid #1e293b", paddingLeft: "0.9rem", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                                {task.subtasks.map(sub => (
+                                  <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                    <button onClick={() => toggleSubtask(task.id, sub.id)} style={{ width: 17, height: 17, borderRadius: "50%", border: "2px solid " + (sub.done ? "#22c55e" : "#334155"), background: sub.done ? "#22c55e" : "transparent", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                                      {sub.done && <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#0d0d14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+                                    </button>
+                                    <span style={{ fontSize: "0.82rem", color: sub.done ? "#475569" : "#cbd5e1", textDecoration: sub.done ? "line-through" : "none", flex: 1 }}>{sub.label}</span>
+                                    <button onClick={() => removeSubtask(task.id, sub.id)} style={{ background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.72rem", padding: "0 4px" }}>x</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {addingSubtask === task.id ? (
+                              <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.4rem" }}>
+                                <input autoFocus value={newSubtask[task.id] || ""} onChange={e => setNewSubtask(n => ({ ...n, [task.id]: e.target.value }))}
+                                  onKeyDown={e => { if (e.key === "Enter") addSubtask(task.id); if (e.key === "Escape") setAddingSubtask(null); }}
+                                  placeholder="Alt gorev adi..."
+                                  style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "4px 8px", color: "#e2e8f0", fontSize: "0.78rem", outline: "none" }} />
+                                <button onClick={() => addSubtask(task.id)} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "4px 10px", color: "#0d0d14", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}>Ekle</button>
+                                <button onClick={() => setAddingSubtask(null)} style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "4px 8px", color: "#94a3b8", cursor: "pointer", fontSize: "0.75rem" }}>Iptal</button>
+                              </div>
+                            ) : (
+                              <button onClick={() => { setAddingSubtask(task.id); setExpanded(e => ({ ...e, [task.id]: true })); }} style={{ marginTop: "0.5rem", background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.72rem", padding: 0, display: "block" }}>
+                                + alt gorev ekle
+                              </button>
+                            )}
+
+                            {editingNote === task.id ? (
+                              <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.4rem" }}>
+                                <input autoFocus value={noteInput} onChange={e => setNoteInput(e.target.value)}
+                                  onKeyDown={e => { if (e.key === "Enter") saveNote(task.id); if (e.key === "Escape") setEditingNote(null); }}
+                                  placeholder="Not ekle..."
+                                  style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "4px 8px", color: "#e2e8f0", fontSize: "0.78rem", outline: "none" }} />
+                                <button onClick={() => saveNote(task.id)} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "4px 10px", color: "#0d0d14", cursor: "pointer", fontSize: "0.75rem", fontWeight: "bold" }}>Kaydet</button>
+                                <button onClick={() => setEditingNote(null)} style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "4px 8px", color: "#94a3b8", cursor: "pointer", fontSize: "0.75rem" }}>Iptal</button>
+                              </div>
+                            ) : task.note ? (
+                              <div style={{ marginTop: "0.5rem", fontSize: "0.78rem", color: "#94a3b8", fontStyle: "italic", cursor: "pointer" }} onClick={() => { setNoteInput(task.note); setEditingNote(task.id); }}>
+                                {"📝 " + task.note}
+                              </div>
+                            ) : (
+                              <button onClick={() => { setNoteInput(""); setEditingNote(task.id); }} style={{ marginTop: "0.3rem", background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.72rem", padding: 0, display: "block" }}>
+                                + not ekle
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {/* Add New Task */}
+            {addingTask ? (
+              <div style={{ background: "#13131f", border: "1px solid #334155", borderRadius: 14, padding: "1.1rem 1.2rem", marginBottom: "1rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Yeni Gorev</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", gap: "0.4rem" }}>
+                    <input value={newTask.emoji} onChange={e => setNewTask(n => ({ ...n, emoji: e.target.value }))} style={{ width: 44, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "6px 8px", color: "#e2e8f0", fontSize: "1rem", outline: "none", textAlign: "center" }} />
+                    <input autoFocus value={newTask.title} onChange={e => setNewTask(n => ({ ...n, title: e.target.value }))}
+                      onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setAddingTask(false); }}
+                      placeholder="Gorev basligi..."
+                      style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "6px 10px", color: "#e2e8f0", fontSize: "0.88rem", outline: "none" }} />
+                  </div>
+                  <input value={newTask.detail} onChange={e => setNewTask(n => ({ ...n, detail: e.target.value }))}
+                    placeholder="Aciklama (istege bagli)..."
+                    style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 6, padding: "6px 10px", color: "#e2e8f0", fontSize: "0.78rem", outline: "none" }} />
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.7rem", color: "#64748b" }}>Kategori:</span>
+                    {allCategories.map(cat => (
+                      <button key={cat} onClick={() => setNewTask(n => ({ ...n, category: cat }))} style={{ fontSize: "0.68rem", padding: "2px 10px", borderRadius: 99, border: "none", cursor: "pointer", background: newTask.category === cat ? "#818cf8" : "#1e293b", color: newTask.category === cat ? "#0d0d14" : "#94a3b8", fontWeight: newTask.category === cat ? "bold" : "normal" }}>
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.7rem", color: "#64748b" }}>Oncelik:</span>
+                    {PRIORITIES.map(p => (
+                      <button key={p} onClick={() => setNewTask(n => ({ ...n, priority: p }))} style={{ fontSize: "0.68rem", padding: "2px 10px", borderRadius: 99, border: "none", cursor: "pointer", background: newTask.priority === p ? priorityColor[p] : "#1e293b", color: newTask.priority === p ? "#0d0d14" : "#94a3b8", fontWeight: newTask.priority === p ? "bold" : "normal" }}>
+                        {priorityLabel[p]}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ fontSize: "0.7rem", color: "#64748b" }}>Zaman:</span>
+                    {["bugun", "yarin"].map(t => (
+                      <button key={t} onClick={() => setNewTask(n => ({ ...n, time: t }))} style={{ fontSize: "0.68rem", padding: "2px 10px", borderRadius: 99, border: "none", cursor: "pointer", background: newTask.time === t ? "#818cf8" : "#1e293b", color: newTask.time === t ? "#0d0d14" : "#94a3b8", fontWeight: newTask.time === t ? "bold" : "normal" }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.25rem" }}>
+                    <button onClick={addTask} style={{ background: "#22c55e", border: "none", borderRadius: 6, padding: "6px 14px", color: "#0d0d14", cursor: "pointer", fontSize: "0.8rem", fontWeight: "bold" }}>Ekle</button>
+                    <button onClick={() => setAddingTask(false)} style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "6px 12px", color: "#94a3b8", cursor: "pointer", fontSize: "0.8rem" }}>Iptal</button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingTask(true)} style={{ width: "100%", background: "transparent", border: "1px dashed #1e293b", borderRadius: 14, padding: "0.8rem", color: "#334155", cursor: "pointer", fontSize: "0.8rem", marginBottom: "1rem" }}>
+                + yeni gorev ekle
+              </button>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: "0.5rem", fontSize: "0.68rem", color: "#1e293b", textAlign: "center" }}>
+          Oncelik rozetine tikla: dongüsel degisir - tüm rozetler tiklanabilir
+        </div>
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(React.createElement(Yapilacaklar));
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+self.addEventListener('install', e => e.waitUntil(
+  caches.open('yapilacaklar-v1').then(c => c.addAll(['/']))
+));
+self.addEventListener('fetch', e => {
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
+`;
+      const blob = new Blob([swCode], {type: 'application/javascript'});
+      const url = URL.createObjectURL(blob);
+      navigator.serviceWorker.register(url);
+    }
+  </script>
+</body>
+</html>
