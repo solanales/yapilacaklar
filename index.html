@@ -355,6 +355,32 @@ function datePrefix() {
   return yy + mm + dd;
 }
 
+function PriorityDropdown({ priority, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+  return (
+    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={() => setOpen(o => !o)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: priorityBg[priority], color: priorityColor[priority], border: "none", cursor: "pointer" }}>
+        {"● " + priorityLabel[priority] + " ▾"}
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "110%", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "0.3rem", zIndex: 100, display: "flex", flexDirection: "column", gap: "0.2rem", minWidth: 90 }}>
+          {PRIORITIES.map(p => (
+            <button key={p} onClick={() => { onChange(p); setOpen(false); }} style={{ fontSize: "0.68rem", padding: "4px 10px", borderRadius: 6, border: "none", cursor: "pointer", background: priority === p ? priorityBg[p] : "transparent", color: priorityColor[p], textAlign: "left", fontWeight: priority === p ? "bold" : "normal" }}>
+              {"● " + priorityLabel[p]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Yapilacaklar() {
   const [tasks, setTasks] = useState([]);
   const [closedTasks, setClosedTasks] = useState([]);
@@ -636,9 +662,7 @@ function Yapilacaklar() {
                                 {"⏰ " + formatTimeLabel(task.time)}
                               </button>
 
-                              <button onClick={() => cyclePriority(task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: priorityBg[task.priority], color: priorityColor[task.priority], border: "none", cursor: "pointer" }}>
-                                {"● " + priorityLabel[task.priority]}
-                              </button>
+                              <PriorityDropdown priority={task.priority} onChange={p => updateTask(task.id, { priority: p })} />
 
                               <button onClick={() => setEditingRecurrence(editingRecurrence === task.id ? null : task.id)} style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: 99, background: recCol + "18", color: recCol, border: "1px solid " + recCol + "44", cursor: "pointer" }}>
                                 {"🔁 " + recLabel + (task.recurrence === "haftalik" && task.recurrenceDay ? " · " + task.recurrenceDay : "")}
