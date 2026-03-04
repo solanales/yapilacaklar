@@ -736,6 +736,45 @@ function Yapilacaklar() {
           </div>
         )}
 
+        {/* Dışa/İçe Aktar */}
+        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+          <button onClick={() => {
+            const data = JSON.stringify({ tasks, customCategories }, null, 2);
+            const blob = new Blob([data], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "yapilacaklar-yedek.json";
+            a.click();
+            URL.revokeObjectURL(url);
+          }} style={{ fontSize: "0.75rem", padding: "6px 16px", borderRadius: 8, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", cursor: "pointer" }}>
+            ⬇ Dışa Aktar
+          </button>
+          <label style={{ fontSize: "0.75rem", padding: "6px 16px", borderRadius: 8, background: "#1e293b", color: "#94a3b8", border: "1px solid #334155", cursor: "pointer" }}>
+            ⬆ İçe Aktar
+            <input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => {
+              const file = e.target.files[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                try {
+                  const parsed = JSON.parse(ev.target.result);
+                  const importedTasks = Array.isArray(parsed) ? parsed : (parsed.tasks || []);
+                  const importedCats = Array.isArray(parsed) ? [] : (parsed.customCategories || []);
+                  if (importedTasks.length > 0) {
+                    setTasks(importedTasks);
+                    setCustomCategories(importedCats);
+                    alert("Veriler başarıyla içe aktarıldı! ✅");
+                  } else {
+                    alert("Geçersiz dosya!");
+                  }
+                } catch (_) { alert("Dosya okunamadı!"); }
+              };
+              reader.readAsText(file);
+              e.target.value = "";
+            }} />
+          </label>
+        </div>
         <div style={{ marginTop: "0.5rem", fontSize: "0.68rem", color: "#1e293b", textAlign: "center" }}>
           Oncelik rozetine tikla: dongüsel degisir - tüm rozetler tiklanabilir
         </div>
