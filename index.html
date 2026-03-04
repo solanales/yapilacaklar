@@ -328,8 +328,21 @@ function TimeEditor({ value, onChange, onClose }) {
 }
 
 function RecurrenceEditor({ task, onChange, onClose }) {
-  const days = normalizeDays(task.recurrenceDays);
-  const toggleDay = (day) => onChange({ recurrenceDays: days.includes(day)?days.filter(d=>d!==day):[...days,day] });
+  const [localDays, setLocalDays] = useState(normalizeDays(task.recurrenceDays));
+  const [localRec, setLocalRec] = useState(task.recurrence||"tek-seferlik");
+
+  const toggleDay = (day) => {
+    const newDays = localDays.includes(day) ? localDays.filter(d=>d!==day) : [...localDays, day];
+    setLocalDays(newDays);
+    onChange({ recurrenceDays: newDays });
+  };
+  const changeRec = (val) => {
+    setLocalRec(val);
+    setLocalDays([]);
+    const needsDays = val==="haftalik"||val==="aylik";
+    onChange({recurrence:val, recurrenceDays:[]});
+    if(!needsDays) onClose();
+  };
   return (
     <div style={{ marginTop:"0.6rem",background:"#0d0d14",border:"1px solid #1e293b",borderRadius:8,padding:"0.7rem 0.9rem",display:"flex",flexDirection:"column",gap:"0.5rem" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
@@ -338,27 +351,27 @@ function RecurrenceEditor({ task, onChange, onClose }) {
       </div>
       <div style={{ display:"flex",gap:"0.4rem",flexWrap:"wrap" }}>
         {RECURRENCE_OPTIONS.map(opt=>(
-          <button key={opt.value} onClick={()=>{ const nd=opt.value==="haftalik"||opt.value==="aylik"; onChange({recurrence:opt.value,recurrenceDays:[]}); if(!nd)onClose(); }} style={{ fontSize:"0.72rem",padding:"3px 10px",borderRadius:99,cursor:"pointer",border:"none",background:task.recurrence===opt.value?recurrenceColor[opt.value]:"#1e293b",color:task.recurrence===opt.value?"#0d0d14":"#94a3b8",fontWeight:task.recurrence===opt.value?"bold":"normal" }}>
+          <button key={opt.value} onClick={()=>changeRec(opt.value)} style={{ fontSize:"0.72rem",padding:"3px 10px",borderRadius:99,cursor:"pointer",border:"none",background:localRec===opt.value?recurrenceColor[opt.value]:"#1e293b",color:localRec===opt.value?"#0d0d14":"#94a3b8",fontWeight:localRec===opt.value?"bold":"normal" }}>
             {opt.label}
           </button>
         ))}
       </div>
-      {task.recurrence==="haftalik"&&(
+      {localRec==="haftalik"&&(
         <div style={{ display:"flex",gap:"0.3rem",flexWrap:"wrap" }}>
           {WEEKDAYS.map(day=>(
-            <button key={day} onClick={()=>toggleDay(day)} style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,cursor:"pointer",border:"none",background:days.includes(day)?"#34d399":"#1e293b",color:days.includes(day)?"#0d0d14":"#94a3b8",fontWeight:days.includes(day)?"bold":"normal" }}>{day}</button>
+            <button key={day} onClick={()=>toggleDay(day)} style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,cursor:"pointer",border:"none",background:localDays.includes(day)?"#34d399":"#1e293b",color:localDays.includes(day)?"#0d0d14":"#94a3b8",fontWeight:localDays.includes(day)?"bold":"normal" }}>{day}</button>
           ))}
         </div>
       )}
-      {task.recurrence==="aylik"&&(
+      {localRec==="aylik"&&(
         <div style={{ display:"flex",gap:"0.3rem",flexWrap:"wrap" }}>
           {Array.from({length:31},(_,i)=>i+1).map(day=>(
-            <button key={day} onClick={()=>toggleDay(day)} style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,cursor:"pointer",border:"none",background:days.includes(day)?"#f472b6":"#1e293b",color:days.includes(day)?"#0d0d14":"#94a3b8",fontWeight:days.includes(day)?"bold":"normal",minWidth:28,textAlign:"center" }}>{day}</button>
+            <button key={day} onClick={()=>toggleDay(day)} style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,cursor:"pointer",border:"none",background:localDays.includes(day)?"#f472b6":"#1e293b",color:localDays.includes(day)?"#0d0d14":"#94a3b8",fontWeight:localDays.includes(day)?"bold":"normal",minWidth:28,textAlign:"center" }}>{day}</button>
           ))}
         </div>
       )}
-      {(task.recurrence==="haftalik"||task.recurrence==="aylik")&&days.length>0&&(
-        <div style={{ fontSize:"0.65rem",color:"#64748b" }}>{"Seçili: "+days.join(", ")}</div>
+      {(localRec==="haftalik"||localRec==="aylik")&&localDays.length>0&&(
+        <div style={{ fontSize:"0.65rem",color:"#64748b" }}>{"Seçili: "+localDays.join(", ")}</div>
       )}
     </div>
   );
@@ -712,6 +725,52 @@ function Yapilacaklar() {
   const progress=tasks.length>0?Math.round((completed/tasks.length)*100):0;
   const categories=[...new Set(tasks.map(t=>t.category))];
 
+  // Bu haftanın Pazartesi-Pazar aralığı
+  const getWeekRange = () => {
+    const today = new Date();
+    const dow = today.getDay();
+    const diff = dow===0?-6:1-dow;
+    const mon = new Date(today); mon.setDate(today.getDate()+diff); mon.setHours(0,0,0,0);
+    const sun = new Date(mon); sun.setDate(mon.getDate()+6);
+    return { start: localDateStr(mon), end: localDateStr(sun) };
+  };
+  const weekRange = getWeekRange();
+
+  const taskInThisWeek = (t) => {
+    if (t.overdue) return true; // gecikmiş görevler her zaman göster
+    if (t.recurrence==="gunluk") return true;
+    if (t.recurrence==="haftalik") {
+      const days=normalizeDays(t.recurrenceDays);
+      for(let i=0;i<=6;i++){
+        const ds=addDays(weekRange.start,i);
+        if(ds>weekRange.end)break;
+        const d=new Date(ds+"T00:00:00"),wd=d.getDay();
+        if(days.includes(WEEKDAYS[wd===0?6:wd-1]))return true;
+      }
+      return false;
+    }
+    if (t.recurrence==="aylik") {
+      const days=normalizeDays(t.recurrenceDays).map(Number);
+      for(let i=0;i<=6;i++){
+        const ds=addDays(weekRange.start,i);
+        if(ds>weekRange.end)break;
+        if(days.includes(new Date(ds+"T00:00:00").getDate()))return true;
+      }
+      return false;
+    }
+    // tek-seferlik
+    const today=localDateStr();
+    const tom=addDays(today,1);
+    let taskDate;
+    if(t.time==="bugun")taskDate=today;
+    else if(t.time==="yarin")taskDate=tom;
+    else taskDate=t.time;
+    if(!taskDate)return false;
+    return taskDate>=weekRange.start && taskDate<=weekRange.end;
+  };
+  const weekTasks = tasks.filter(taskInThisWeek);
+  const weekCategories = [...new Set(weekTasks.map(t=>t.category))];
+
   return (
     <div style={{ minHeight:"100vh",background:"#0d0d14",fontFamily:"Georgia, serif",padding:"2rem 1rem",color:"#e2e8f0" }}>
       <div style={{ maxWidth:660,margin:"0 auto" }}>
@@ -783,14 +842,14 @@ function Yapilacaklar() {
         {/* Liste */}
         {view==="liste"&&(
           <div>
-            {tasks.length===0&&!addingTask&&(
-              <div style={{ textAlign:"center",color:"#475569",fontSize:"0.85rem",padding:"3rem 0" }}>Henüz görev yok. Aşağıdan yeni görev ekle.</div>
+            {weekTasks.length===0&&!addingTask&&(
+              <div style={{ textAlign:"center",color:"#475569",fontSize:"0.85rem",padding:"3rem 0" }}>Bu hafta için görev yok. Aşağıdan yeni görev ekle.</div>
             )}
-            {categories.map(cat=>(
+            {weekCategories.map(cat=>(
               <div key={cat} style={{ marginBottom:"1.5rem" }}>
                 <div style={{ fontSize:"0.68rem",letterSpacing:"0.15em",color:"#475569",textTransform:"uppercase",marginBottom:"0.5rem",paddingLeft:"0.2rem" }}>{cat}</div>
                 <div style={{ display:"flex",flexDirection:"column",gap:"0.6rem" }}>
-                  {tasks.filter(t=>t.category===cat).sort((a,b)=>({yuksek:0,orta:1,dusuk:2}[a.priority]??1)-({yuksek:0,orta:1,dusuk:2}[b.priority]??1)).map(task=>{
+                  {weekTasks.filter(t=>t.category===cat).sort((a,b)=>({yuksek:0,orta:1,dusuk:2}[a.priority]??1)-({yuksek:0,orta:1,dusuk:2}[b.priority]??1)).map(task=>{
                     const st=statusConfig[task.status];
                     const doneSubtasks=task.subtasks.filter(s=>s.done).length;
                     const isExpanded=expanded[task.id];
