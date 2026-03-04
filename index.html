@@ -44,27 +44,6 @@ const statusConfig = {
 
 const DEFAULT_CATEGORIES = ["Biyomedikal", "Koşu Koçluğu", "Kişisel"];
 
-const initialTasks = [
-  { id: 1, category: "Biyomedikal", emoji: "🏥", title: "MR Cihazı - Firma Eşliği", detail: "Öğleden önce firma gelecek, arıza tespitine eşlik et.", priority: "yuksek", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-  { id: 2, category: "Biyomedikal", emoji: "🏥", title: "BT Arızası - Firma Bildirimi", detail: "Bilgisayarlı tomografi arızasını ilgili firmaya bildir.", priority: "yuksek", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-  { id: 6, category: "Biyomedikal", emoji: "📋", title: "Bildirim Paneli - Cihaz Durumu Bilgisi", detail: "Biyomedikal bildirim paneline cihaz durumu bilgisi ekle.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-  { id: 7, category: "Biyomedikal", emoji: "🤝", title: "GE - Gama Kamera Taşıma Görüşmeleri", detail: "GE ile gama kamera taşıma işleri hakkında görüşme yap.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-  { id: 3, category: "Koşu Koçluğu", emoji: "🏃", title: "Haftalık Antrenman Planları", detail: "Her sporcu için haftalık koşu planı oluştur.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "haftalik", recurrenceDay: "Pazartesi", subtasks: [
-    { id: "3-1", label: "Arzu Çelik", done: false },
-    { id: "3-2", label: "Cansel Çelik", done: false },
-    { id: "3-3", label: "Çağatay Yılmaz", done: false },
-    { id: "3-4", label: "Erhan Kaya", done: false },
-    { id: "3-5", label: "Göksel Çelik", done: false },
-    { id: "3-6", label: "Hasan Fırat Sarıoğlu", done: false },
-    { id: "3-7", label: "Meliha Sultan Özenç", done: false },
-    { id: "3-8", label: "Tuğçe Çalıkoğlu Eski", done: false },
-    { id: "3-9", label: "Volkan Gündüz", done: false },
-    { id: "3-10", label: "Zeynep Yeşil", done: false },
-  ], startedAt: null },
-  { id: 4, category: "Kişisel", emoji: "🐱", title: "Luna - Su Sebili Filtresi", detail: "Luna için su sebili filtresi satın al.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-  { id: 5, category: "Kişisel", emoji: "🚗", title: "Araç Muayenesi", detail: "Araç muayenesi için randevu al.", priority: "orta", time: "bugun", status: "bekliyor", note: "", recurrence: "tek-seferlik", recurrenceDay: null, subtasks: [], startedAt: null },
-];
-
 function formatElapsed(isoString) {
   if (!isoString) return null;
   const diff = Math.floor((Date.now() - new Date(isoString)) / 1000);
@@ -377,12 +356,13 @@ function datePrefix() {
 }
 
 function Yapilacaklar() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState([]);
+  const [closedTasks, setClosedTasks] = useState([]);
   const [customCategories, setCustomCategories] = useState([]);
   const [view, setView] = useState("liste");
   const [editingNote, setEditingNote] = useState(null);
   const [noteInput, setNoteInput] = useState("");
-  const [expanded, setExpanded] = useState({ 3: true });
+  const [expanded, setExpanded] = useState({});
   const [newSubtask, setNewSubtask] = useState({});
   const [addingSubtask, setAddingSubtask] = useState(null);
   const [editingRecurrence, setEditingRecurrence] = useState(null);
@@ -401,12 +381,10 @@ function Yapilacaklar() {
         const stored = JSON.parse(raw);
         const storedTasks = Array.isArray(stored) ? stored : (stored.tasks || []);
         const storedCats = Array.isArray(stored) ? [] : (stored.customCategories || []);
-        if (storedTasks.length > 0) {
-          const storedIds = new Set(storedTasks.map(t => t.id));
-          const newTasks = initialTasks.filter(t => !storedIds.has(t.id));
-          setTasks([...storedTasks, ...newTasks]);
-          if (storedCats.length > 0) setCustomCategories(storedCats);
-        }
+        const storedClosed = Array.isArray(stored) ? [] : (stored.closedTasks || []);
+        if (storedTasks.length > 0) setTasks(storedTasks);
+        if (storedCats.length > 0) setCustomCategories(storedCats);
+        if (storedClosed.length > 0) setClosedTasks(storedClosed);
       }
     } catch (_) {}
     setLoaded(true);
@@ -414,8 +392,8 @@ function Yapilacaklar() {
 
   useEffect(() => {
     if (!loaded) return;
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, customCategories })); } catch (_) {}
-  }, [tasks, customCategories, loaded]);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks, customCategories, closedTasks })); } catch (_) {}
+  }, [tasks, customCategories, closedTasks, loaded]);
 
   const allCategories = [...new Set([...DEFAULT_CATEGORIES, ...customCategories, ...tasks.map(t => t.category)])];
 
@@ -457,8 +435,26 @@ function Yapilacaklar() {
     setTasks(prev => prev.map(t => t.id !== taskId ? t : { ...t, subtasks: t.subtasks.filter(s => s.id !== subId) }));
   };
 
-  const deleteTask = (id) => {
+  // Görevi kapatılanlara taşı
+  const closeTask = (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    setClosedTasks(prev => [{ ...task, closedAt: new Date().toISOString() }, ...prev]);
     setTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  // Kapatılanı geri al
+  const restoreTask = (id) => {
+    const task = closedTasks.find(t => t.id === id);
+    if (!task) return;
+    const { closedAt, ...restored } = task;
+    setTasks(prev => [restored, ...prev]);
+    setClosedTasks(prev => prev.filter(t => t.id !== id));
+  };
+
+  // Kapatılanı kalıcı sil
+  const deleteClosedTask = (id) => {
+    setClosedTasks(prev => prev.filter(t => t.id !== id));
   };
 
   const saveNote = (id) => {
@@ -494,7 +490,7 @@ function Yapilacaklar() {
 
   const completed = tasks.filter(t => t.status === "tamamlandi").length;
   const inProgress = tasks.filter(t => t.status === "devamediyor").length;
-  const progress = Math.round((completed / tasks.length) * 100);
+  const progress = tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
   const todayLabel = new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
   const categories = [...new Set(tasks.map(t => t.category))];
 
@@ -506,24 +502,31 @@ function Yapilacaklar() {
         <div style={{ marginBottom: "2rem" }}>
           <div style={{ fontSize: "0.72rem", letterSpacing: "0.2em", color: "#64748b", textTransform: "uppercase", marginBottom: "0.3rem" }}>{todayLabel}</div>
           <h1 style={{ fontSize: "2rem", fontWeight: "normal", margin: 0, color: "#f1f5f9", letterSpacing: "-0.02em" }}>Yapılacaklar</h1>
-          <div style={{ marginTop: "1rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-              <div style={{ display: "flex", gap: "0.75rem" }}>
-                <span style={{ fontSize: "0.72rem", color: "#22c55e" }}>{"✓ " + completed + " tamamlandı"}</span>
-                {inProgress > 0 && <span style={{ fontSize: "0.72rem", color: "#f59e0b" }}>{"● " + inProgress + " devam ediyor"}</span>}
-                <span style={{ fontSize: "0.72rem", color: "#475569" }}>{(tasks.length - completed - inProgress) + " bekliyor"}</span>
+          {tasks.length > 0 && (
+            <div style={{ marginTop: "1rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                <div style={{ display: "flex", gap: "0.75rem" }}>
+                  <span style={{ fontSize: "0.72rem", color: "#22c55e" }}>{"✓ " + completed + " tamamlandı"}</span>
+                  {inProgress > 0 && <span style={{ fontSize: "0.72rem", color: "#f59e0b" }}>{"● " + inProgress + " devam ediyor"}</span>}
+                  <span style={{ fontSize: "0.72rem", color: "#475569" }}>{(tasks.length - completed - inProgress) + " bekliyor"}</span>
+                </div>
+                <span style={{ fontSize: "0.72rem", color: "#64748b" }}>{progress + "%"}</span>
               </div>
-              <span style={{ fontSize: "0.72rem", color: "#64748b" }}>{progress + "%"}</span>
+              <div style={{ height: 3, background: "#1e293b", borderRadius: 99, position: "relative", overflow: "hidden" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: Math.round(((completed + inProgress) / tasks.length) * 100) + "%", background: "#f59e0b22", transition: "width 0.5s ease" }} />
+                <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: progress + "%", background: "linear-gradient(90deg, #22c55e, #86efac)", transition: "width 0.5s ease" }} />
+              </div>
             </div>
-            <div style={{ height: 3, background: "#1e293b", borderRadius: 99, position: "relative", overflow: "hidden" }}>
-              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: Math.round(((completed + inProgress) / tasks.length) * 100) + "%", background: "#f59e0b22", transition: "width 0.5s ease" }} />
-              <div style={{ position: "absolute", left: 0, top: 0, height: "100%", borderRadius: 99, width: progress + "%", background: "linear-gradient(90deg, #22c55e, #86efac)", transition: "width 0.5s ease" }} />
-            </div>
-          </div>
+          )}
           {/* View Toggle */}
           <div style={{ display: "flex", gap: "0.4rem", marginTop: "1rem" }}>
-            {[{id:"liste",label:"Liste"},{id:"haftalik",label:"Haftalık"},{id:"aylik",label:"Aylık"}].map(v => (
-              <button key={v.id} onClick={() => setView(v.id)} style={{ fontSize: "0.72rem", padding: "4px 12px", borderRadius: 99, border: "none", cursor: "pointer", background: view === v.id ? "#818cf8" : "#1e293b", color: view === v.id ? "#0d0d14" : "#94a3b8", fontWeight: view === v.id ? "bold" : "normal", transition: "all 0.2s" }}>
+            {[
+              {id:"liste", label:"Liste"},
+              {id:"haftalik", label:"Haftalık"},
+              {id:"aylik", label:"Aylık"},
+              {id:"kapatilan", label: "Kapatılan" + (closedTasks.length > 0 ? " (" + closedTasks.length + ")" : "")}
+            ].map(v => (
+              <button key={v.id} onClick={() => setView(v.id)} style={{ fontSize: "0.72rem", padding: "4px 12px", borderRadius: 99, border: "none", cursor: "pointer", background: view === v.id ? (v.id === "kapatilan" ? "#475569" : "#818cf8") : "#1e293b", color: view === v.id ? "#f1f5f9" : "#94a3b8", fontWeight: view === v.id ? "bold" : "normal", transition: "all 0.2s" }}>
                 {v.label}
               </button>
             ))}
@@ -534,9 +537,53 @@ function Yapilacaklar() {
         {view === "haftalik" && <WeeklyCalendar tasks={tasks} />}
         {view === "aylik" && <MonthlyCalendar tasks={tasks} />}
 
+        {/* Kapatılan View */}
+        {view === "kapatilan" && (
+          <div>
+            {closedTasks.length === 0 ? (
+              <div style={{ textAlign: "center", color: "#475569", fontSize: "0.85rem", padding: "3rem 0" }}>
+                Henüz kapatılan görev yok
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                {closedTasks.map(task => (
+                  <div key={task.id} style={{ background: "#13131f", border: "1px solid #1e293b", borderRadius: 14, padding: "1rem 1.2rem", opacity: 0.7 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "0.92rem", color: "#64748b", textDecoration: "line-through", marginBottom: "0.2rem" }}>
+                          {task.emoji + " " + task.title}
+                        </div>
+                        {task.detail && <div style={{ fontSize: "0.75rem", color: "#334155" }}>{task.detail}</div>}
+                        <div style={{ fontSize: "0.65rem", color: "#334155", marginTop: "0.3rem" }}>
+                          {"Kapatıldı: " + new Date(task.closedAt).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
+                        <button onClick={() => restoreTask(task.id)} title="Geri al" style={{ background: "#1e293b", border: "none", borderRadius: 6, padding: "4px 10px", color: "#818cf8", cursor: "pointer", fontSize: "0.72rem" }}>
+                          ↩ Geri Al
+                        </button>
+                        <button onClick={() => deleteClosedTask(task.id)} title="Kalıcı sil" style={{ background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.8rem", padding: "0 2px" }}
+                          onMouseEnter={e => e.target.style.color = "#ef4444"}
+                          onMouseLeave={e => e.target.style.color = "#334155"}>
+                          🗑
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* List View */}
         {view === "liste" && (
           <div>
+            {tasks.length === 0 && !addingTask && (
+              <div style={{ textAlign: "center", color: "#475569", fontSize: "0.85rem", padding: "3rem 0" }}>
+                Henüz görev yok. Aşağıdan yeni görev ekle.
+              </div>
+            )}
             {categories.map(cat => (
               <div key={cat} style={{ marginBottom: "1.5rem" }}>
                 <div style={{ fontSize: "0.68rem", letterSpacing: "0.15em", color: "#475569", textTransform: "uppercase", marginBottom: "0.5rem", paddingLeft: "0.2rem" }}>{cat}</div>
@@ -572,10 +619,10 @@ function Yapilacaklar() {
                                 <div onClick={() => { setTitleInput(task.title); setEditingTitle(task.id); }} style={{ fontSize: "0.95rem", fontWeight: "bold", color: "#f1f5f9", textDecoration: task.status === "tamamlandi" ? "line-through" : "none", cursor: "text", flex: 1 }} title="Düzenlemek için tıkla">
                                   {task.emoji + " " + task.title}
                                 </div>
-                                <button onClick={() => deleteTask(task.id)} title="Görevi sil" style={{ background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.8rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
-                                  onMouseEnter={e => e.target.style.color = "#ef4444"}
+                                <button onClick={() => closeTask(task.id)} title="Görevi kapat" style={{ background: "transparent", border: "none", color: "#334155", cursor: "pointer", fontSize: "0.8rem", padding: "0 2px", flexShrink: 0, lineHeight: 1 }}
+                                  onMouseEnter={e => e.target.style.color = "#f59e0b"}
                                   onMouseLeave={e => e.target.style.color = "#334155"}>
-                                  🗑
+                                  ✕
                                 </button>
                               </div>
                             )}
@@ -737,7 +784,7 @@ function Yapilacaklar() {
         {/* Dışa/İçe Aktar */}
         <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem", justifyContent: "center" }}>
           <button onClick={() => {
-            const data = JSON.stringify({ tasks, customCategories }, null, 2);
+            const data = JSON.stringify({ tasks, customCategories, closedTasks }, null, 2);
             const blob = new Blob([data], { type: "application/json" });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -759,9 +806,11 @@ function Yapilacaklar() {
                   const parsed = JSON.parse(ev.target.result);
                   const importedTasks = Array.isArray(parsed) ? parsed : (parsed.tasks || []);
                   const importedCats = Array.isArray(parsed) ? [] : (parsed.customCategories || []);
-                  if (importedTasks.length > 0) {
+                  const importedClosed = Array.isArray(parsed) ? [] : (parsed.closedTasks || []);
+                  if (importedTasks.length > 0 || importedClosed.length > 0) {
                     setTasks(importedTasks);
                     setCustomCategories(importedCats);
+                    setClosedTasks(importedClosed);
                     alert("Veriler başarıyla içe aktarıldı! ✅");
                   } else {
                     alert("Geçersiz dosya!");
