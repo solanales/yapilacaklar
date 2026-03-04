@@ -70,6 +70,7 @@ function updateTitlePrefix(title, newPrefix) {
 }
 
 function resetTask(task, today) {
+  const prefix = datePrefix(today);
   return {
     ...task,
     status: "bekliyor",
@@ -78,11 +79,19 @@ function resetTask(task, today) {
     lastResetDate: today,
     overdue: false,
     postponedUntil: null,
+    title: updateTitlePrefix(task.title, prefix),
   };
 }
 
 // Bir görevin belirli bir tarihte planlanmış olup olmadığı (takvim için)
 function taskMatchesDate(t, ds) {
+  // scheduledDate tabanlı instance
+  if (t.scheduledDate) {
+    if (t.postponedUntil && t.postponedUntil > ds) return false;
+    if (t.overdue) return ds <= localDateStr();
+    return t.scheduledDate === ds;
+  }
+
   if (t.postponedUntil && t.postponedUntil > ds) return false;
 
   const todayStr = localDateStr();
@@ -152,6 +161,70 @@ function getNextScheduledDate(task, fromDate) {
   return null;
 }
 
+// fromDate dahil ilk planlanmış günü bul
+function getFirstScheduledDateOnOrAfter(task, fromDate) {
+  if (task.recurrence==="gunluk") return fromDate;
+  if (task.recurrence==="haftalik") {
+    const days=normalizeDays(task.recurrenceDays);
+    if(!days.length)return null;
+    for(let i=0;i<=7;i++){
+      const ds=addDays(fromDate,i);
+      const d=new Date(ds+"T00:00:00");
+      const wd=d.getDay();
+      if(days.includes(WEEKDAYS[wd===0?6:wd-1]))return ds;
+    }
+    return null;
+  }
+  if (task.recurrence==="aylik") {
+    const days=normalizeDays(task.recurrenceDays).map(Number).sort((a,b)=>a-b);
+    if(!days.length)return null;
+    const from=new Date(fromDate+"T00:00:00");
+    const fromDay=from.getDate(),fromMonth=from.getMonth(),fromYear=from.getFullYear();
+    for(const day of days){
+      if(day>=fromDay){
+        const maxDay=new Date(fromYear,fromMonth+1,0).getDate();
+        if(day<=maxDay)return fromYear+"-"+String(fromMonth+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+      }
+    }
+    const nm=fromMonth===11?0:fromMonth+1,ny=fromMonth===11?fromYear+1:fromYear;
+    const nmMax=new Date(ny,nm+1,0).getDate();
+    for(const day of days){if(day<=nmMax)return ny+"-"+String(nm+1).padStart(2,"0")+"-"+String(day).padStart(2,"0");}
+    return null;
+  }
+  return null;
+}
+
+// Tekrarlayan görev için N adet instance üret (haftalık/aylık)
+function spawnInstances(baseTask, today, count=2) {
+  if(baseTask.recurrence==="tek-seferlik"||baseTask.recurrence==="gunluk")return null;
+  const days=normalizeDays(baseTask.recurrenceDays);
+  if(!days.length)return null;
+  const rawTitle=/^\d{6} /.test(baseTask.title)?baseTask.title.slice(7):baseTask.title;
+  const seriesId=String(baseTask.seriesId||baseTask.id);
+  const instances=[];
+  let searchFrom=today;
+  for(let i=0;i<count;i++){
+    const scheduled=i===0
+      ?getFirstScheduledDateOnOrAfter(baseTask,searchFrom)
+      :getNextScheduledDate(baseTask,searchFrom);
+    if(!scheduled)break;
+    instances.push({
+      ...baseTask,
+      id:i===0?baseTask.id:(seriesId+"_"+scheduled.replace(/-/g,"")),
+      seriesId,
+      title:datePrefix(scheduled)+" "+rawTitle,
+      scheduledDate:scheduled,
+      lastResetDate:today,
+      status:"bekliyor",
+      overdue:false,
+      postponedUntil:null,
+      startedAt:null,
+    });
+    searchFrom=scheduled;
+  }
+  return instances.length>0?instances:null;
+}
+
 // Gün değişiminde görev işleme
 function processTaskOnDayChange(t, today) {
   const todayDate = new Date(today+"T00:00:00");
@@ -165,14 +238,17 @@ function processTaskOnDayChange(t, today) {
     postponedUntil: t.postponedUntil || null,
   };
 
-  // lastResetDate yoksa bugünü ata
   if (!task.lastResetDate) return { ...task, lastResetDate: today };
-
-  // postponedUntil geçtiyse temizle
   if (task.postponedUntil && task.postponedUntil <= today) task = { ...task, postponedUntil: null };
-
-  // Bugün zaten işlenmiş
   if (task.lastResetDate >= today) return task;
+
+  // scheduledDate tabanlı pre-spawned instance'lar
+  if (task.scheduledDate) {
+    if (task.status==="tamamlandi") return { ...task, lastResetDate: today };
+    if (task.scheduledDate < today) return { ...task, overdue: true, lastResetDate: today };
+    // scheduledDate >= today: henüz gelmemiş, dokunma
+    return { ...task, lastResetDate: today };
+  }
 
   const scheduledDays = normalizeDays(task.recurrenceDays);
 
@@ -180,7 +256,6 @@ function processTaskOnDayChange(t, today) {
 
   if (task.recurrence === "haftalik") {
     if (scheduledDays.includes(todayWD)) return resetTask(task, today);
-    // Bugün planlanmamış — önceki günden taşındı mı?
     if (task.status !== "tamamlandi" && !task.postponedUntil) {
       const lastDate = new Date(task.lastResetDate+"T00:00:00");
       const lastWD = WEEKDAYS[lastDate.getDay()===0?6:lastDate.getDay()-1];
@@ -533,25 +608,66 @@ function Yapilacaklar() {
     const interval = setInterval(()=>{
       const today = localDateStr();
       setTasks(prev=>{
-        const processed = prev.map(t=>processTaskOnDayChange(t,today));
-        const changed = processed.some((t,i)=>t.status!==prev[i].status||t.overdue!==prev[i].overdue||t.lastResetDate!==prev[i].lastResetDate);
-        return changed ? processed : prev;
+        let changed = false;
+        let result = prev.map(t=>{
+          const processed = processTaskOnDayChange(t,today);
+          if(processed!==t)changed=true;
+          return processed;
+        });
+        // Gecikmiş instance'ın aynı seriden daha yeni bir instance'ı varsa sil
+        const filtered = result.filter(t=>{
+          if(!t.scheduledDate||!t.seriesId||t.status==="tamamlandi"||!t.overdue)return true;
+          const sid=String(t.seriesId);
+          const hasNewer=result.some(o=>o.id!==t.id&&String(o.seriesId)===sid&&o.scheduledDate&&o.scheduledDate>t.scheduledDate);
+          if(hasNewer){changed=true;return false;}
+          return true;
+        });
+        return changed ? filtered : prev;
       });
-    }, 30000); // Her 30 saniyede bir kontrol
+    }, 30000);
     return ()=>clearInterval(interval);
   },[loaded]);
 
   const allCategories = [...new Set([...DEFAULT_CATEGORIES,...customCategories,...tasks.map(t=>t.category)])];
 
   const cycleStatus = (id) => {
-    setTasks(prev=>prev.map(t=>{
-      if(t.id!==id)return t;
+    setTasks(prev=>{
+      const task=prev.find(t=>t.id===id);
+      if(!task)return prev;
       const order=["bekliyor","devamediyor","tamamlandi"];
-      const next=order[(order.indexOf(t.status)+1)%order.length];
-      if(next==="tamamlandi"){s.complete();return{...t,status:next,overdue:false,postponedUntil:null,startedAt:t.startedAt};}
-      if(next==="devamediyor"){s.progress();return{...t,status:next,startedAt:!t.startedAt?new Date().toISOString():t.startedAt};}
-      s.reset(); return{...t,status:next,startedAt:null};
-    }));
+      const next=order[(order.indexOf(task.status)+1)%order.length];
+      if(next==="tamamlandi"){
+        s.complete();
+        let newTasks=prev.map(t=>t.id===id?{...t,status:next,overdue:false,postponedUntil:null}:t);
+        // scheduledDate'li tekrarlayan instance tamamlandıysa bir sonrakini spawn et
+        if(task.scheduledDate&&task.seriesId&&task.recurrence!=="tek-seferlik"&&task.recurrence!=="gunluk"){
+          const sid=String(task.seriesId);
+          const activeSeries=newTasks.filter(t=>String(t.seriesId)===sid&&t.status!=="tamamlandi");
+          if(activeSeries.length<2){
+            const allSeries=newTasks.filter(t=>String(t.seriesId)===sid);
+            const lastDate=allSeries.reduce((max,t)=>t.scheduledDate>max?t.scheduledDate:max,"");
+            if(lastDate){
+              const nextDate=getNextScheduledDate(task,lastDate);
+              if(nextDate){
+                const rawTitle=/^\d{6} /.test(task.title)?task.title.slice(7):task.title;
+                newTasks=[...newTasks,{
+                  ...task,
+                  id:sid+"_"+nextDate.replace(/-/g,""),
+                  seriesId:sid,
+                  title:datePrefix(nextDate)+" "+rawTitle,
+                  scheduledDate:nextDate,
+                  lastResetDate:localDateStr(),
+                  status:"bekliyor",overdue:false,postponedUntil:null,startedAt:null,
+                }];
+              }
+            }
+          }
+        }
+        return newTasks;
+      }
+      if(next==="devamediyor"){s.progress();return prev.map(t=>t.id===id?{...t,status:next,startedAt:!t.startedAt?new Date().toISOString():t.startedAt}:t);}
+      s.reset(); return prev.map(t=>t.id===id?{...t,status:next,startedAt:null}:t);
+    });
   };
 
   const toggleSubtask = (taskId,subId) => {
@@ -569,18 +685,30 @@ function Yapilacaklar() {
     }));
   };
 
-  const handleOtele = (id) => {
+  const handleOtele = (task) => {
     s.otele();
-    const task = tasks.find(t=>t.id===id);
-    if (!task) return;
     const today = localDateStr();
     const tomorrow = addDays(today,1);
-    if (task.recurrence==="gunluk") { closeTask(id); return; }
-    if (task.recurrence==="tek-seferlik") { updateTask(id,{postponedUntil:tomorrow,overdue:false}); return; }
+    if (task.recurrence==="gunluk") {
+      setClosedTasks(prev=>[{...task,closedAt:new Date().toISOString()},...prev]);
+      setTasks(prev=>prev.filter(t=>t.id!==task.id));
+      return;
+    }
+    if (task.recurrence==="tek-seferlik") {
+      updateTask(task.id,{postponedUntil:tomorrow,overdue:false,scheduledDate:tomorrow,title:updateTitlePrefix(task.title,datePrefix(tomorrow))});
+      return;
+    }
     if (task.recurrence==="haftalik"||task.recurrence==="aylik") {
-      const next = getNextScheduledDate(task,today);
-      if (next===tomorrow) { closeTask(id); }
-      else { updateTask(id,{postponedUntil:tomorrow,overdue:false}); }
+      const seriesId=String(task.seriesId||task.id);
+      const nextScheduled=getNextScheduledDate(task,today);
+      const tomorrowIsScheduled=(nextScheduled===tomorrow);
+      const tomorrowInstanceExists=tasks.some(t=>t.id!==task.id&&String(t.seriesId||t.id)===seriesId&&t.scheduledDate===tomorrow);
+      if(tomorrowIsScheduled||tomorrowInstanceExists){
+        setClosedTasks(prev=>[{...task,closedAt:new Date().toISOString()},...prev]);
+        setTasks(prev=>prev.filter(t=>t.id!==task.id));
+      } else {
+        updateTask(task.id,{scheduledDate:tomorrow,postponedUntil:tomorrow,overdue:false,title:updateTitlePrefix(task.title,datePrefix(tomorrow))});
+      }
     }
   };
 
@@ -634,39 +762,23 @@ function Yapilacaklar() {
 
   const saveTitle = (id) => { setTasks(prev=>prev.map(t=>t.id===id?{...t,title:titleInput.trim()||t.title}:t)); setEditingTitle(null); };
 
-  // Tekrarlama değişince tarih etiketini güncelle
+  // Tekrarlama değişince instance'ları spawn et
   const handleRecurrenceChange = (taskId, changes) => {
-    setTasks(prev=>prev.map(t=>{
-      if(t.id!==taskId)return t;
-      const updated = {...t,...changes};
-      const today = localDateStr();
-      const days = normalizeDays(updated.recurrenceDays);
-      let newPrefix = null;
-      if(updated.recurrence==="haftalik"&&days.length>0){
-        // Bugün bu günlerden biri mi?
-        const todayD = new Date(today+"T00:00:00");
-        const todayWD = WEEKDAYS[todayD.getDay()===0?6:todayD.getDay()-1];
-        if(days.includes(todayWD)) newPrefix=datePrefix(today);
-        else {
-          const next=getNextScheduledDate(updated,addDays(today,-1));
-          if(next) newPrefix=datePrefix(next);
-        }
-      } else if(updated.recurrence==="aylik"&&days.length>0){
-        const todayD2 = new Date(today+"T00:00:00");
-        if(days.map(Number).includes(todayD2.getDate())) newPrefix=datePrefix(today);
-        else {
-          const next=getNextScheduledDate(updated,addDays(today,-1));
-          if(next) newPrefix=datePrefix(next);
-        }
-      } else if(updated.recurrence==="gunluk"){
-        newPrefix=datePrefix(today);
+    const today = localDateStr();
+    setTasks(prev=>{
+      const task=prev.find(t=>t.id===taskId);
+      if(!task)return prev;
+      const seriesId=String(task.seriesId||taskId);
+      const updated={...task,...changes,seriesId};
+      const instances=spawnInstances(updated,today,2);
+      if(!instances){
+        // Gün seçilmemiş ya da tek-seferlik/günlük → sadece güncelle
+        return prev.map(t=>t.id===taskId?updated:t);
       }
-      if(newPrefix){
-        const rawTitle = /^\d{6} /.test(updated.title)?updated.title.slice(7):updated.title;
-        updated.title = newPrefix+" "+rawTitle;
-      }
-      return updated;
-    }));
+      // Mevcut serinin tüm instance'larını kaldır, yenilerini ekle
+      const others=prev.filter(t=>String(t.seriesId)!==seriesId&&t.id!==taskId);
+      return [...others,...instances];
+    });
   };
 
   const formatTimeLabel = (val) => {
@@ -798,7 +910,7 @@ function Yapilacaklar() {
                                 </div>
                                 <div style={{ display:"flex",gap:"0.3rem",flexShrink:0 }}>
                                   {task.status!=="tamamlandi"&&(
-                                    <button onClick={()=>handleOtele(task.id)} title="Ötele" style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"0.72rem",padding:"0 3px",lineHeight:1 }}
+                                    <button onClick={()=>handleOtele(task)} title="Ötele" style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"0.72rem",padding:"0 3px",lineHeight:1 }}
                                       onMouseEnter={e=>e.target.style.color="#818cf8"} onMouseLeave={e=>e.target.style.color="#475569"}>
                                       ⏭
                                     </button>
