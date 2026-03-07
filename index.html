@@ -646,10 +646,10 @@ function Yapilacaklar() {
       if(isSyncingRef.current)return;
       isSyncingRef.current = true;
       const ts = Date.now();
-      lastWriteTimeRef.current = ts;
+      lastWriteTimeRef.current = ts + 3000; // 3 saniyelik buffer — kendi yankımızı engelle
       setSyncStatus("syncing");
       window._fbdb.ref("data/"+syncCode).set({tasks,customCategories,closedTasks,_ts:ts})
-        .then(()=>setSyncStatus("synced"))
+        .then(()=>{ setSyncStatus("synced"); })
         .catch(()=>{ setSyncStatus("error"); lastWriteTimeRef.current=0; })
         .finally(()=>{ isSyncingRef.current=false; });
     },500);
