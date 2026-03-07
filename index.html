@@ -597,14 +597,14 @@ function Yapilacaklar() {
 
   const fbLoadedRef = useRef(false);
   const writeTimerRef = useRef(null);
-  const deviceId = useRef(()=>{
+  const deviceId = useRef(null);
+  if(!deviceId.current){
     try{
       let id=localStorage.getItem("device-id");
       if(!id){id=Math.random().toString(36).slice(2);localStorage.setItem("device-id",id);}
-      return id;
-    }catch(_){return Math.random().toString(36).slice(2);}
-  }).current;
-  const lastWrittenByRef = useRef(null);
+      deviceId.current=id;
+    }catch(_){deviceId.current=Math.random().toString(36).slice(2);}
+  }
 
   const attachFirebaseListener = (code) => {
     if (!code||!window._fbdb) return;
@@ -616,7 +616,7 @@ function Yapilacaklar() {
       const val = snap.val();
       if (val && val.tasks) {
         // Kendi yazdığımız güncellemeyi geri okuyorsak atla
-        if(val._writtenBy && val._writtenBy === deviceId){
+        if(val._writtenBy && val._writtenBy === deviceId.current){
           fbLoadedRef.current = true;
           setSyncStatus("synced");
           return;
@@ -656,7 +656,7 @@ function Yapilacaklar() {
       if(isSyncingRef.current)return;
       isSyncingRef.current = true;
       setSyncStatus("syncing");
-      window._fbdb.ref("data/"+syncCode).set({tasks,customCategories,closedTasks,_writtenBy:deviceId})
+      window._fbdb.ref("data/"+syncCode).set({tasks,customCategories,closedTasks,_writtenBy:deviceId.current})
         .then(()=>setSyncStatus("synced"))
         .catch(()=>setSyncStatus("error"))
         .finally(()=>{ isSyncingRef.current=false; });
