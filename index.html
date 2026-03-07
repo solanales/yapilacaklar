@@ -613,7 +613,14 @@ function Yapilacaklar() {
       if (val && val.tasks) {
         const today = localDateStr();
         try {
-          const t = (val.tasks||[]).map(t=>processTaskOnDayChange(t,today));
+          const t = (val.tasks||[]).map(t=>processTaskOnDayChange({
+            subtasks:[],
+            recurrenceDays:[],
+            overdue:false,
+            postponedUntil:null,
+            note:"",
+            ...t
+          },today));
           const c = val.customCategories||[];
           const cl = val.closedTasks||[];
           // Gelen veriyi sakla — write effect bunu görünce yazmayacak
