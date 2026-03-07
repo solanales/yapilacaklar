@@ -650,13 +650,13 @@ function Yapilacaklar() {
 
   // Firebase'e yaz — debounce 500ms
   useEffect(()=>{
-    if(!loaded||!syncCode||!window._fbdb||!fbLoadedRef.current)return;
+    if(!loaded||!syncCode||!window._fbdb)return;
     if(writeTimerRef.current) clearTimeout(writeTimerRef.current);
     writeTimerRef.current = setTimeout(()=>{
       if(isSyncingRef.current)return;
       isSyncingRef.current = true;
       const ts = Date.now();
-      lastWriteTimeRef.current = ts + 3000; // 3 saniyelik buffer — kendi yankımızı engelle
+      lastWriteTimeRef.current = ts + 3000;
       setSyncStatus("syncing");
       window._fbdb.ref("data/"+syncCode).set({tasks,customCategories,closedTasks,bgColor,cardColor,_ts:ts})
         .then(()=>{ setSyncStatus("synced"); })
@@ -903,7 +903,7 @@ function Yapilacaklar() {
             <div style={{ marginTop:"0.75rem",background:"#13131f",border:"1px solid #334155",borderRadius:12,padding:"1rem" }}>
               <div style={{ fontSize:"0.72rem",color:"#64748b",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.75rem" }}>Arka Plan Rengi</div>
               <div style={{ display:"flex",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.5rem" }}>
-                {["#ffffff","#f8fafc","#f1f5f9","#e2e8f0","#f0f4f8","#fafafa","#f5f5f5","#fff8f0","#f0f9ff","#fdf4ff","#f0fdf4","#fff1f2","#fffbeb","#f8f8ff","#f5f0ff"].map(c=>(
+                {["#c8d6e5","#dfe6e9","#d6eaf8","#d5d8dc","#e8daef","#d1f2eb","#fde8d8","#fdfefe","#eaf4fc","#f4ecf7","#e8f8f5","#fef9e7","#fdedec","#eaeded","#f2f3f4"].map(c=>(
                   <button key={c} onClick={()=>setBgColor(c)} style={{ width:28,height:28,borderRadius:6,background:c,border:bgColor===c?"2px solid #818cf8":"2px solid #334155",cursor:"pointer",padding:0 }}/>
                 ))}
               </div>
@@ -915,7 +915,7 @@ function Yapilacaklar() {
               </div>
               <div style={{ fontSize:"0.72rem",color:"#64748b",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.75rem" }}>Görev Kutusu Rengi</div>
               <div style={{ display:"flex",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.5rem" }}>
-                {["#ffffff","#f8fafc","#f1f5f9","#e8edf2","#eef2f7","#fafafa","#f5f5f5","#fff8f0","#f0f9ff","#fdf4ff","#f0fdf4","#fff1f2","#fffbeb","#f8f8ff","#f5f0ff"].map(c=>(
+                {["#aab7c4","#b2bec3","#a9cce3","#b3b6b7","#c39bd3","#a2d9ce","#f0b27a","#d5dbdb","#85c1e9","#d2b4de","#76d7c4","#f9e79f","#f1948a","#bdc3c7","#d7dbdd"].map(c=>(
                   <button key={c} onClick={()=>setCardColor(c)} style={{ width:28,height:28,borderRadius:6,background:c,border:cardColor===c?"2px solid #818cf8":"2px solid #334155",cursor:"pointer",padding:0 }}/>
                 ))}
               </div>
