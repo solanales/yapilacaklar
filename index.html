@@ -416,7 +416,7 @@ function titleForDate(task, ds) {
   return datePrefix(ds) + " " + raw;
 }
 
-function CalendarDayDetail({ date, tasks, onClose }) {
+function CalendarDayDetail({ date, tasks, onClose, onCloseTask }) {
   const ds = localDateStr(date);
   const dotColor = { bekliyor:"#94a3b8",devamediyor:"#f59e0b",tamamlandi:"#22c55e" };
   const dayTasks = tasks.filter(t=>taskMatchesDate(t,ds));
@@ -437,6 +437,9 @@ function CalendarDayDetail({ date, tasks, onClose }) {
               <span style={{ fontSize:"0.65rem",padding:"1px 7px",borderRadius:99,background:t.overdue?"rgba(239,68,68,0.12)":t.status==="bekliyor"?"rgba(148,163,184,0.12)":t.status==="devamediyor"?"rgba(245,158,11,0.12)":"rgba(34,197,94,0.12)",color:t.overdue?"#ef4444":t.status==="bekliyor"?"#94a3b8":t.status==="devamediyor"?"#f59e0b":"#22c55e" }}>
                 {t.overdue?"Gecikmiş":t.status==="bekliyor"?"Bekliyor":t.status==="devamediyor"?"Devam":"Tamam"}
               </span>
+              {t.status==="tamamlandi"&&onCloseTask&&(
+                <button onClick={()=>onCloseTask(t)} title="Kapat" style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"0.85rem",lineHeight:1,padding:"0 2px" }}>✕</button>
+              )}
             </div>
           ))}
         </div>
@@ -472,7 +475,7 @@ function CalendarGrid({ days, tasks, todayStr, selectedDay, onSelect, minHeight=
   );
 }
 
-function WeeklyCalendar({ tasks }) {
+function WeeklyCalendar({ tasks, onCloseTask }) {
   const [base,setBase] = useState(new Date());
   const [selectedDay,setSelectedDay] = useState(null);
   const todayStr = localDateStr();
@@ -497,12 +500,12 @@ function WeeklyCalendar({ tasks }) {
           <CalendarGrid days={days} tasks={tasks} todayStr={todayStr} selectedDay={selectedDay} onSelect={setSelectedDay} minHeight={56}/>
         </div>
       </div>
-      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)}/>}
+      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask}/>}
     </div>
   );
 }
 
-function MonthlyCalendar({ tasks }) {
+function MonthlyCalendar({ tasks, onCloseTask }) {
   const [base,setBase] = useState(new Date());
   const [selectedDay,setSelectedDay] = useState(null);
   const todayStr = localDateStr();
@@ -532,7 +535,7 @@ function MonthlyCalendar({ tasks }) {
           <CalendarGrid days={days} tasks={tasks} todayStr={todayStr} selectedDay={selectedDay} onSelect={setSelectedDay} minHeight={46}/>
         </div>
       </div>
-      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)}/>}
+      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask}/>}
     </div>
   );
 }
@@ -900,7 +903,7 @@ function Yapilacaklar() {
             <div style={{ marginTop:"0.75rem",background:"#13131f",border:"1px solid #334155",borderRadius:12,padding:"1rem" }}>
               <div style={{ fontSize:"0.72rem",color:"#64748b",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.75rem" }}>Arka Plan Rengi</div>
               <div style={{ display:"flex",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.5rem" }}>
-                {["#0d0d14","#0f172a","#1a1a2e","#0f0e17","#1b1b2f","#16213e","#1a1a1a","#0d1117","#1e1b2e","#0a0a0f","#12111a","#060a10","#1f1235","#0e1628","#14181c"].map(c=>(
+                {["#ffffff","#f8fafc","#f1f5f9","#e2e8f0","#f0f4f8","#fafafa","#f5f5f5","#fff8f0","#f0f9ff","#fdf4ff","#f0fdf4","#fff1f2","#fffbeb","#f8f8ff","#f5f0ff"].map(c=>(
                   <button key={c} onClick={()=>setBgColor(c)} style={{ width:28,height:28,borderRadius:6,background:c,border:bgColor===c?"2px solid #818cf8":"2px solid #334155",cursor:"pointer",padding:0 }}/>
                 ))}
               </div>
@@ -912,7 +915,7 @@ function Yapilacaklar() {
               </div>
               <div style={{ fontSize:"0.72rem",color:"#64748b",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:"0.75rem" }}>Görev Kutusu Rengi</div>
               <div style={{ display:"flex",gap:"0.5rem",flexWrap:"wrap",marginBottom:"0.5rem" }}>
-                {["#13131f","#1e293b","#0f172a","#1a1a2e","#16213e","#1e1b2e","#0d1117","#1f1235","#12111a","#1a1525","#0e1628","#161b22","#1c1c2e","#0f0f1a","#1a1a1a"].map(c=>(
+                {["#ffffff","#f8fafc","#f1f5f9","#e8edf2","#eef2f7","#fafafa","#f5f5f5","#fff8f0","#f0f9ff","#fdf4ff","#f0fdf4","#fff1f2","#fffbeb","#f8f8ff","#f5f0ff"].map(c=>(
                   <button key={c} onClick={()=>setCardColor(c)} style={{ width:28,height:28,borderRadius:6,background:c,border:cardColor===c?"2px solid #818cf8":"2px solid #334155",cursor:"pointer",padding:0 }}/>
                 ))}
               </div>
@@ -980,8 +983,8 @@ function Yapilacaklar() {
           </div>
         </div>
 
-        {view==="haftalik"&&<WeeklyCalendar tasks={tasks}/>}
-        {view==="aylik"&&<MonthlyCalendar tasks={tasks}/>}
+        {view==="haftalik"&&<WeeklyCalendar tasks={tasks} onCloseTask={closeTask}/>}
+        {view==="aylik"&&<MonthlyCalendar tasks={tasks} onCloseTask={closeTask}/>}
 
         {/* Kapatılan */}
         {view==="kapatilan"&&(
