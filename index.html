@@ -424,7 +424,191 @@ function titleForDate(task, ds) {
   return datePrefix(ds) + " " + raw;
 }
 
-function CalendarDayDetail({ date, tasks, onClose, onCloseTask, onPostponeTask, onToggleDateComplete }) {
+
+function TaskDetailSheet({ task, onClose, cycleStatus, updateTask, handleOtele, closeTask,
+  toggleSubtask, addSubtask, handleRecurrenceChange, allCategories, setCustomCategories,
+  formatTimeLabel, formatRecurrenceLabel, formatElapsed }) {
+  const [editingTitle, setEditingTitle] = useState(null);
+  const [titleInput, setTitleInput] = useState("");
+  const [editingDetail, setEditingDetail] = useState(null);
+  const [detailInput, setDetailInput] = useState("");
+  const [editingNote, setEditingNote] = useState(null);
+  const [noteInput, setNoteInput] = useState("");
+  const [editingRecurrence, setEditingRecurrence] = useState(false);
+  const [editingTime, setEditingTime] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(false);
+  const [expanded, setExpanded] = useState(true);
+  const [addingSub, setAddingSub] = useState(false);
+  const [newSubInput, setNewSubInput] = useState("");
+
+  const st = statusConfig[task.status];
+  const recCol = recurrenceColor[task.recurrence]||"#64748b";
+  const isOverdue = task.overdue && task.status!=="tamamlandi";
+  const isPostponed = task.postponedUntil && task.postponedUntil > localDateStr();
+  const elapsed = formatElapsed(task.startedAt);
+  const doneSubtasks = task.subtasks.filter(s=>s.done).length;
+
+  const saveTitle = () => {
+    const raw = titleInput.trim();
+    if (!raw) return;
+    updateTask(task.id, { title: raw });
+    setEditingTitle(false);
+  };
+
+  return (
+    <div style={{ position:"fixed",inset:0,zIndex:999,display:"flex",flexDirection:"column",justifyContent:"flex-end" }}
+      onClick={e=>{ if(e.target===e.currentTarget)onClose(); }}>
+      <div style={{ background:"rgba(0,0,0,0.55)",position:"absolute",inset:0 }} onClick={onClose}/>
+      <div style={{ position:"relative",background:"#0f1117",borderRadius:"18px 18px 0 0",padding:"1.2rem 1.2rem 2rem",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 -4px 32px rgba(0,0,0,0.5)" }}>
+        {/* Drag handle */}
+        <div style={{ width:40,height:4,background:"#334155",borderRadius:99,margin:"0 auto 1rem" }}/>
+        {/* Close */}
+        <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:"0.5rem" }}>
+          <button onClick={onClose} style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"1.1rem",lineHeight:1,padding:"2px 6px" }}>✕</button>
+        </div>
+
+        <div style={{ background:"var(--card-color)",border:"1px solid "+(isOverdue?"#ef444433":"#1e293b"),borderRadius:14,padding:"1.1rem 1.2rem",opacity:task.status==="tamamlandi"?0.85:1 }}>
+          <div style={{ display:"flex",alignItems:"flex-start",gap:"0.75rem" }}>
+            <div style={{ paddingTop:2 }}>
+              <CheckCircle status={task.status} onClick={()=>cycleStatus(task.id)}/>
+            </div>
+            <div style={{ flex:1,minWidth:0 }}>
+              {editingTitle?(
+                <div style={{ display:"flex",gap:"0.4rem",alignItems:"center",marginBottom:"0.2rem" }}>
+                  <input autoFocus value={titleInput} onChange={e=>setTitleInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter")saveTitle(); if(e.key==="Escape")setEditingTitle(false); }}
+                    style={{ flex:1,background:"#1e293b",border:"1px solid #475569",borderRadius:6,padding:"4px 8px",color:"#f1f5f9",fontSize:"0.95rem",fontWeight:"bold",outline:"none" }}/>
+                  <button onClick={saveTitle} style={{ background:"#22c55e",border:"none",borderRadius:6,padding:"3px 8px",color:"#0d0d14",cursor:"pointer",fontSize:"0.72rem",fontWeight:"bold" }}>Kaydet</button>
+                  <button onClick={()=>setEditingTitle(false)} style={{ background:"#1e293b",border:"none",borderRadius:6,padding:"3px 6px",color:"#94a3b8",cursor:"pointer",fontSize:"0.72rem" }}>İptal</button>
+                </div>
+              ):(
+                <div style={{ display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:"0.4rem" }}>
+                  <div onClick={()=>{ setTitleInput(task.title); setEditingTitle(true); }}
+                    style={{ fontSize:"0.95rem",fontWeight:"bold",color:isOverdue?"#fca5a5":"#f1f5f9",textDecoration:task.status==="tamamlandi"?"line-through":"none",cursor:"text",flex:1 }}>
+                    {task.emoji+" "+task.title}
+                  </div>
+                  <div style={{ display:"flex",gap:"0.3rem",flexShrink:0 }}>
+                    {task.status!=="tamamlandi"&&(
+                      <button onClick={()=>handleOtele(task)} title="Ötele" style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"0.72rem",padding:"0 3px",lineHeight:1 }}
+                        onMouseEnter={e=>e.target.style.color="#818cf8"} onMouseLeave={e=>e.target.style.color="#475569"}>⏭</button>
+                    )}
+                    <button onClick={()=>{ closeTask(task.id); onClose(); }} title="Kapat" style={{ background:"transparent",border:"none",color:"#334155",cursor:"pointer",fontSize:"0.8rem",padding:"0 2px",lineHeight:1 }}
+                      onMouseEnter={e=>e.target.style.color="#f59e0b"} onMouseLeave={e=>e.target.style.color="#334155"}>✕</button>
+                  </div>
+                </div>
+              )}
+
+              {editingDetail?(
+                <div style={{ display:"flex",gap:"0.4rem",alignItems:"center",marginTop:"0.2rem" }}>
+                  <input autoFocus value={detailInput} onChange={e=>setDetailInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter"){updateTask(task.id,{detail:detailInput});setEditingDetail(false);} if(e.key==="Escape")setEditingDetail(false); }}
+                    style={{ flex:1,background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",fontSize:"0.75rem",outline:"none" }}/>
+                  <button onClick={()=>{updateTask(task.id,{detail:detailInput});setEditingDetail(false);}} style={{ background:"#818cf8",border:"none",borderRadius:6,padding:"3px 8px",color:"#0d0d14",cursor:"pointer",fontSize:"0.72rem" }}>✓</button>
+                  <button onClick={()=>setEditingDetail(false)} style={{ background:"transparent",border:"none",color:"#475569",cursor:"pointer",fontSize:"0.8rem" }}>✕</button>
+                </div>
+              ):(
+                <div onClick={()=>{ setDetailInput(task.detail||""); setEditingDetail(true); }}
+                  style={{ fontSize:"0.78rem",color:task.detail?"#64748b":"#334155",marginTop:"0.2rem",cursor:"pointer",minHeight:"1rem" }}>
+                  {task.detail||<span style={{color:"#2d3748",fontSize:"0.72rem"}}>+ açıklama ekle</span>}
+                </div>
+              )}
+
+              {task.subtasks.length>0&&(()=>{
+                const pct=Math.round((doneSubtasks/task.subtasks.length)*100);
+                return(
+                  <div style={{ marginTop:"0.5rem" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",marginBottom:"0.2rem" }}>
+                      <span style={{ fontSize:"0.62rem",color:"#475569" }}>{doneSubtasks+"/"+task.subtasks.length+" alt görev"}</span>
+                      <span style={{ fontSize:"0.62rem",color:"#475569" }}>{pct+"%"}</span>
+                    </div>
+                    <div style={{ height:3,background:"#1e293b",borderRadius:99,overflow:"hidden" }}>
+                      <div style={{ height:"100%",borderRadius:99,width:pct+"%",background:pct===100?"linear-gradient(90deg,#22c55e,#86efac)":"linear-gradient(90deg,#818cf8,#a5b4fc)",transition:"width 0.4s ease" }}/>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div style={{ display:"flex",gap:"0.4rem",marginTop:"0.5rem",flexWrap:"wrap",alignItems:"center" }}>
+                {isOverdue&&<span style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(239,68,68,0.15)",color:"#ef4444",fontWeight:"bold" }}>⚠ Gecikmiş</span>}
+                {isPostponed&&<span style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(129,140,248,0.12)",color:"#818cf8" }}>{"⏭ "+task.postponedUntil+" ertelendi"}</span>}
+                {!isOverdue&&<span style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:st.bg,color:st.color }}>{st.label}</span>}
+                <button onClick={()=>{ setEditingTime(v=>!v); setEditingRecurrence(false); setEditingCategory(false); }}
+                  style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.04)",color:"#94a3b8",border:"none",cursor:"pointer" }}>
+                  {"⏰ "+formatTimeLabel(task.time)}
+                </button>
+                <PriorityDropdown priority={task.priority} onChange={p=>updateTask(task.id,{priority:p})}/>
+                <button onClick={()=>{ setEditingRecurrence(v=>!v); setEditingTime(false); setEditingCategory(false); }}
+                  style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:recCol+"18",color:recCol,border:"1px solid "+recCol+"44",cursor:"pointer" }}>
+                  {"🔁 "+formatRecurrenceLabel(task)}
+                </button>
+                <button onClick={()=>{ setEditingCategory(v=>!v); setEditingTime(false); setEditingRecurrence(false); }}
+                  style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.04)",color:"#64748b",border:"none",cursor:"pointer" }}>
+                  {"🏷 "+task.category}
+                </button>
+                {task.status==="devamediyor"&&elapsed&&(
+                  <span style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(245,158,11,0.12)",color:"#f59e0b" }}>{"⏱ "+elapsed}</span>
+                )}
+                {task.subtasks.length>0&&(
+                  <button onClick={()=>setExpanded(v=>!v)} style={{ fontSize:"0.68rem",padding:"2px 8px",borderRadius:99,background:"rgba(255,255,255,0.06)",color:"#94a3b8",border:"none",cursor:"pointer" }}>
+                    {(expanded?"▲ ":"▼ ")+doneSubtasks+"/"+task.subtasks.length+" alt görev"}
+                  </button>
+                )}
+              </div>
+
+              {editingTime&&<TimeEditor value={task.time} onChange={val=>updateTask(task.id,{time:val})} onClose={()=>setEditingTime(false)}/>}
+              {editingRecurrence&&<RecurrenceEditor task={task} onChange={changes=>handleRecurrenceChange(task.id,changes)} onClose={()=>setEditingRecurrence(false)}/>}
+              {editingCategory&&<CategoryEditor task={task} allCategories={allCategories} onSelect={cat=>updateTask(task.id,{category:cat})} onAddCategory={cat=>setCustomCategories(prev=>[...new Set([...prev,cat])])} onClose={()=>setEditingCategory(false)}/>}
+
+              {expanded&&task.subtasks.length>0&&(
+                <div style={{ marginTop:"0.75rem",borderLeft:"2px solid #1e293b",paddingLeft:"0.9rem",display:"flex",flexDirection:"column",gap:"0.4rem" }}>
+                  {task.subtasks.map(sub=>(
+                    <div key={sub.id} style={{ display:"flex",alignItems:"center",gap:"0.5rem" }}>
+                      <button onClick={()=>toggleSubtask(task.id,sub.id)} style={{ width:17,height:17,borderRadius:"50%",border:"2px solid "+(sub.done?"#22c55e":"#334155"),background:sub.done?"#22c55e":"transparent",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",padding:0 }}>
+                        {sub.done&&<svg width="8" height="8" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#0d0d14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      </button>
+                      <span style={{ fontSize:"0.82rem",color:sub.done?"#475569":"#cbd5e1",textDecoration:sub.done?"line-through":"none",flex:1 }}>{sub.label}</span>
+                      <button onClick={()=>updateTask(task.id,{subtasks:task.subtasks.filter(s=>s.id!==sub.id)})} style={{ background:"transparent",border:"none",color:"#334155",cursor:"pointer",fontSize:"0.72rem",padding:"0 4px" }}>x</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {addingSub?(
+                <div style={{ marginTop:"0.6rem",display:"flex",gap:"0.4rem" }}>
+                  <input autoFocus value={newSubInput} onChange={e=>setNewSubInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter"&&newSubInput.trim()){ const label=newSubInput.trim(); updateTask(task.id,{subtasks:[...task.subtasks,{id:task.id+"-"+Date.now(),label:datePrefix()+" "+label,done:false}]}); setNewSubInput(""); setExpanded(true); } if(e.key==="Escape")setAddingSub(false); }}
+                    placeholder="Alt görev adı..."
+                    style={{ flex:1,background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"4px 8px",color:"#e2e8f0",fontSize:"0.78rem",outline:"none" }}/>
+                  <button onClick={()=>{ if(newSubInput.trim()){ updateTask(task.id,{subtasks:[...task.subtasks,{id:task.id+"-"+Date.now(),label:datePrefix()+" "+newSubInput.trim(),done:false}]}); setNewSubInput(""); setExpanded(true); } }} style={{ background:"#22c55e",border:"none",borderRadius:6,padding:"4px 10px",color:"#0d0d14",cursor:"pointer",fontSize:"0.75rem",fontWeight:"bold" }}>Ekle</button>
+                  <button onClick={()=>setAddingSub(false)} style={{ background:"#1e293b",border:"none",borderRadius:6,padding:"4px 8px",color:"#94a3b8",cursor:"pointer",fontSize:"0.75rem" }}>İptal</button>
+                </div>
+              ):(
+                <button onClick={()=>setAddingSub(true)} style={{ marginTop:"0.5rem",background:"transparent",border:"none",color:"#334155",cursor:"pointer",fontSize:"0.72rem",padding:0,display:"block" }}>+ alt görev ekle</button>
+              )}
+
+              {editingNote?(
+                <div style={{ marginTop:"0.5rem",display:"flex",gap:"0.4rem" }}>
+                  <input autoFocus value={noteInput} onChange={e=>setNoteInput(e.target.value)}
+                    onKeyDown={e=>{ if(e.key==="Enter"){ updateTask(task.id,{note:noteInput}); setEditingNote(false); } if(e.key==="Escape")setEditingNote(false); }}
+                    placeholder="Not ekle..."
+                    style={{ flex:1,background:"#1e293b",border:"1px solid #334155",borderRadius:6,padding:"4px 8px",color:"#e2e8f0",fontSize:"0.78rem",outline:"none" }}/>
+                  <button onClick={()=>{ updateTask(task.id,{note:noteInput}); setEditingNote(false); }} style={{ background:"#22c55e",border:"none",borderRadius:6,padding:"4px 10px",color:"#0d0d14",cursor:"pointer",fontSize:"0.75rem",fontWeight:"bold" }}>Kaydet</button>
+                  <button onClick={()=>setEditingNote(false)} style={{ background:"#1e293b",border:"none",borderRadius:6,padding:"4px 8px",color:"#94a3b8",cursor:"pointer",fontSize:"0.75rem" }}>İptal</button>
+                </div>
+              ):task.note?(
+                <div style={{ marginTop:"0.5rem",fontSize:"0.78rem",color:"#94a3b8",fontStyle:"italic",cursor:"pointer" }} onClick={()=>{ setNoteInput(task.note); setEditingNote(true); }}>{"📝 "+task.note}</div>
+              ):(
+                <button onClick={()=>{ setNoteInput(""); setEditingNote(true); }} style={{ marginTop:"0.3rem",background:"transparent",border:"none",color:"#334155",cursor:"pointer",fontSize:"0.72rem",padding:0,display:"block" }}>+ not ekle</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CalendarDayDetail({ date, tasks, onClose, onCloseTask, onPostponeTask, onToggleDateComplete, onTaskClick }) {
   const ds = localDateStr(date);
   const dotColor = { bekliyor:"#94a3b8",devamediyor:"#f59e0b",tamamlandi:"#22c55e" };
   const dayTasks = tasks.filter(t=>taskMatchesDate(t,ds));
@@ -460,7 +644,7 @@ function CalendarDayDetail({ date, tasks, onClose, onCloseTask, onPostponeTask, 
               ):(
                 <div style={{ width:8,height:8,borderRadius:"50%",background:t.overdue?"#ef4444":(dotColor[t.status]||"#94a3b8"),flexShrink:0 }}/>
               )}
-              <span style={{ fontSize:"0.82rem",color:statusForDate==="tamamlandi"?"#475569":"#cbd5e1",textDecoration:statusForDate==="tamamlandi"?"line-through":"none",flex:1 }}>{t.emoji+" "+titleForDate(t,ds)}</span>
+              <span onClick={()=>onTaskClick&&onTaskClick(t)} style={{ fontSize:"0.82rem",color:statusForDate==="tamamlandi"?"#475569":"#cbd5e1",textDecoration:statusForDate==="tamamlandi"?"line-through":"none",flex:1,cursor:"pointer" }}>{t.emoji+" "+titleForDate(t,ds)}</span>
               <span style={{ fontSize:"0.65rem",padding:"1px 7px",borderRadius:99,background:t.overdue?"rgba(239,68,68,0.12)":statusForDate==="bekliyor"?"rgba(148,163,184,0.12)":statusForDate==="devamediyor"?"rgba(245,158,11,0.12)":"rgba(34,197,94,0.12)",color:t.overdue?"#ef4444":statusForDate==="bekliyor"?"#94a3b8":statusForDate==="devamediyor"?"#f59e0b":"#22c55e" }}>
                 {t.overdue?"Gecikmiş":statusForDate==="bekliyor"?"Bekliyor":statusForDate==="devamediyor"?"Devam":"Tamam"}
               </span>
@@ -510,7 +694,7 @@ function CalendarGrid({ days, tasks, todayStr, selectedDay, onSelect, minHeight=
   );
 }
 
-function WeeklyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateComplete }) {
+function WeeklyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateComplete, onTaskClick }) {
   const [base,setBase] = useState(new Date());
   const [selectedDay,setSelectedDay] = useState(null);
   const todayStr = localDateStr();
@@ -535,12 +719,12 @@ function WeeklyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateComple
           <CalendarGrid days={days} tasks={tasks} todayStr={todayStr} selectedDay={selectedDay} onSelect={setSelectedDay} minHeight={56}/>
         </div>
       </div>
-      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask} onPostponeTask={onPostponeTask} onToggleDateComplete={onToggleDateComplete}/>}
+      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask} onPostponeTask={onPostponeTask} onToggleDateComplete={onToggleDateComplete} onTaskClick={onTaskClick}/>}
     </div>
   );
 }
 
-function MonthlyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateComplete }) {
+function MonthlyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateComplete, onTaskClick }) {
   const [base,setBase] = useState(new Date());
   const [selectedDay,setSelectedDay] = useState(null);
   const todayStr = localDateStr();
@@ -570,7 +754,7 @@ function MonthlyCalendar({ tasks, onCloseTask, onPostponeTask, onToggleDateCompl
           <CalendarGrid days={days} tasks={tasks} todayStr={todayStr} selectedDay={selectedDay} onSelect={setSelectedDay} minHeight={46}/>
         </div>
       </div>
-      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask} onPostponeTask={onPostponeTask} onToggleDateComplete={onToggleDateComplete}/>}
+      {selectedDay&&<CalendarDayDetail date={selectedDay.date} tasks={tasks} onClose={()=>setSelectedDay(null)} onCloseTask={onCloseTask} onPostponeTask={onPostponeTask} onToggleDateComplete={onToggleDateComplete} onTaskClick={onTaskClick}/>}
     </div>
   );
 }
@@ -598,6 +782,7 @@ function Yapilacaklar() {
   const [newTask,setNewTask] = useState({title:"",detail:"",category:"Kişisel",emoji:"📌",priority:"orta",time:"bugun"});
   const [newCatInput,setNewCatInput] = useState("");
   const [selectedCategory,setSelectedCategory] = useState(null);
+  const [calendarDetailTask,setCalendarDetailTask] = useState(null);
   const [loaded,setLoaded] = useState(false);
   const [soundOn,setSoundOn] = useState(()=>{ try{return localStorage.getItem("sound-enabled")!=="false";}catch(_){return true;} });
   const [bgColor,setBgColor] = useState(()=>{ try{return localStorage.getItem("bg-color")||"#0d0d14";}catch(_){return "#0d0d14";} });
@@ -1056,8 +1241,8 @@ function Yapilacaklar() {
           </div>
         </div>
 
-        {view==="haftalik"&&<WeeklyCalendar tasks={tasks} onCloseTask={closeTask} onPostponeTask={handleOtele} onToggleDateComplete={toggleDateComplete}/>}
-        {view==="aylik"&&<MonthlyCalendar tasks={tasks} onCloseTask={closeTask} onPostponeTask={handleOtele} onToggleDateComplete={toggleDateComplete}/>}
+        {view==="haftalik"&&<WeeklyCalendar tasks={tasks} onCloseTask={closeTask} onPostponeTask={handleOtele} onToggleDateComplete={toggleDateComplete} onTaskClick={t=>setCalendarDetailTask(t)}/>}
+        {view==="aylik"&&<MonthlyCalendar tasks={tasks} onCloseTask={closeTask} onPostponeTask={handleOtele} onToggleDateComplete={toggleDateComplete} onTaskClick={t=>setCalendarDetailTask(t)}/>}
 
         {/* Kategoriler */}
         {view==="kategoriler"&&(
@@ -1396,6 +1581,24 @@ function Yapilacaklar() {
         </div>
       </div>
     </div>
+    {calendarDetailTask&&(
+      <TaskDetailSheet
+        task={tasks.find(t=>t.id===calendarDetailTask.id)||calendarDetailTask}
+        onClose={()=>setCalendarDetailTask(null)}
+        cycleStatus={cycleStatus}
+        updateTask={updateTask}
+        handleOtele={handleOtele}
+        closeTask={(id)=>{ closeTask(id); setCalendarDetailTask(null); }}
+        toggleSubtask={toggleSubtask}
+        addSubtask={addSubtask}
+        handleRecurrenceChange={handleRecurrenceChange}
+        allCategories={allCategories}
+        setCustomCategories={setCustomCategories}
+        formatTimeLabel={formatTimeLabel}
+        formatRecurrenceLabel={formatRecurrenceLabel}
+        formatElapsed={formatElapsed}
+      />
+    )}
   );
 }
 
