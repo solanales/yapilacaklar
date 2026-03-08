@@ -743,7 +743,7 @@ function Yapilacaklar() {
     const tomorrow = addDays(today,1);
     if (task.recurrence==="gunluk") { closeTask(task.id); return; }
     if (task.recurrence==="tek-seferlik") {
-      updateTask(task.id,{postponedUntil:tomorrow,overdue:false,title:updateTitlePrefix(task.title,datePrefix(tomorrow))});
+      updateTask(task.id,{postponedUntil:tomorrow,overdue:false,time:tomorrow,title:updateTitlePrefix(task.title,datePrefix(tomorrow))});
       return;
     }
     if (task.recurrence==="haftalik"||task.recurrence==="aylik") {
