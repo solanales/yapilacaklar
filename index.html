@@ -1141,6 +1141,7 @@ function Yapilacaklar() {
   const weekCategories = [...new Set(weekTasks.map(t=>t.category))];
 
   return (
+    <>
     <div style={{ minHeight:"100vh",background:bgColor,fontFamily:"Georgia, serif",padding:"2rem 1rem",color:"#e2e8f0" }}>
       <div style={{ maxWidth:660,margin:"0 auto" }}>
         {/* Header */}
@@ -1581,6 +1582,7 @@ function Yapilacaklar() {
         </div>
       </div>
     </div>
+    </>
     {calendarDetailTask&&(
       <TaskDetailSheet
         task={tasks.find(t=>t.id===calendarDetailTask.id)||calendarDetailTask}
@@ -1599,6 +1601,7 @@ function Yapilacaklar() {
         formatElapsed={formatElapsed}
       />
     )}
+    </>
   );
 }
 
