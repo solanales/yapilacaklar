@@ -115,6 +115,7 @@ function taskMatchesDate(t, ds) {
 
   if (t.recurrence === "haftalik") {
     const days = normalizeDays(t.recurrenceDays);
+    if(!days.length) return false;
     const d = new Date(ds+"T00:00:00");
     const wd = d.getDay();
     return days.includes(WEEKDAYS[wd===0?6:wd-1]);
@@ -122,7 +123,8 @@ function taskMatchesDate(t, ds) {
 
   if (t.recurrence === "aylik") {
     const days = normalizeDays(t.recurrenceDays);
-    return days.includes(new Date(ds+"T00:00:00").getDate());
+    if(!days.length) return false;
+    return days.map(Number).includes(new Date(ds+"T00:00:00").getDate());
   }
 
   // tek-seferlik
@@ -921,6 +923,7 @@ function Yapilacaklar() {
     if (t.recurrence==="gunluk") return true;
     if (t.recurrence==="haftalik") {
       const days=normalizeDays(t.recurrenceDays);
+      if(!days.length) return true; // Henüz gün seçilmemişse listede göster
       for(let i=0;i<=6;i++){
         const ds=addDays(weekRange.start,i);
         if(ds>weekRange.end)break;
@@ -931,6 +934,7 @@ function Yapilacaklar() {
     }
     if (t.recurrence==="aylik") {
       const days=normalizeDays(t.recurrenceDays).map(Number);
+      if(!days.length) return true; // Henüz gün seçilmemişse listede göster
       for(let i=0;i<=6;i++){
         const ds=addDays(weekRange.start,i);
         if(ds>weekRange.end)break;
