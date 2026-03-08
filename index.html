@@ -793,6 +793,8 @@ function Yapilacaklar() {
       else { s.complete(); return {...t, completedDates: [...dates, ds]}; }
     }));
   };
+
+  const addSubtask = (taskId) => {
     const label=(newSubtask[taskId]||"").trim();
     if(!label)return;
     setTasks(prev=>prev.map(t=>t.id!==taskId?t:{...t,subtasks:[...t.subtasks,{id:taskId+"-"+Date.now(),label:datePrefix()+" "+label,done:false}]}));
