@@ -104,9 +104,12 @@ function resetTask(task, today) {
 
 // Bir görevin belirli bir tarihte planlanmış olup olmadığı (takvim için)
 function taskMatchesDate(t, ds) {
-  if (t.postponedUntil && t.postponedUntil > ds) return false;
-
   const todayStr = localDateStr();
+
+  // Ertelenmiş görev: sadece ertelenen tarihte göster
+  if (t.postponedUntil) {
+    return ds === t.postponedUntil;
+  }
 
   // Gecikmiş görev: bugün ve geçmişte göster
   if (t.overdue && ds <= todayStr) return true;
