@@ -60,7 +60,7 @@ const statusConfig = {
   devamediyor: { label:"Devam Ediyor", color:"#f59e0b", bg:"rgba(245,158,11,0.12)" },
   tamamlandi: { label:"Tamamlandı", color:"#22c55e", bg:"rgba(34,197,94,0.12)" },
 };
-const DEFAULT_CATEGORIES = ["Biyomedikal","Koşu Koçluğu","Kişisel"];
+const DEFAULT_CATEGORIES = [];
 
 // ── Yardımcı fonksiyonlar ──────────────────────────────────────────
 function normalizeDays(days) {
@@ -720,7 +720,7 @@ function Yapilacaklar() {
     return ()=>clearInterval(interval);
   },[loaded]);
 
-  const allCategories = [...new Set([...DEFAULT_CATEGORIES,...customCategories,...tasks.map(t=>t.category)])];
+  const allCategories = [...new Set([...customCategories,...tasks.map(t=>t.category)])];
 
   const cycleStatus = (id) => {
     setTasks(prev=>prev.map(t=>{
@@ -1017,13 +1017,12 @@ function Yapilacaklar() {
                     {cat}
                     <span style={{ marginLeft:6,fontSize:"0.68rem",opacity:0.7 }}>{tasks.filter(t=>t.category===cat).length}</span>
                   </button>
-                  {!DEFAULT_CATEGORIES.includes(cat)&&(
-                    <button onClick={()=>{
+                  <button onClick={()=>{
                       setCustomCategories(prev=>prev.filter(c=>c!==cat));
+                      setTasks(prev=>prev.map(t=>t.category===cat?{...t,category:"Genel"}:t));
                       if(selectedCategory===cat) setSelectedCategory(null);
                     }} title="Sil" style={{ background:"transparent",border:"none",color:"#334155",cursor:"pointer",fontSize:"0.78rem",padding:"0 2px",lineHeight:1 }}
                       onMouseEnter={e=>e.target.style.color="#ef4444"} onMouseLeave={e=>e.target.style.color="#334155"}>✕</button>
-                  )}
                 </div>
               ))}
               <input value={newCatInput} onChange={e=>setNewCatInput(e.target.value)}
